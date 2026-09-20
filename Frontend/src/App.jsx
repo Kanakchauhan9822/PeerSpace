@@ -1,9 +1,9 @@
-import Register from './features/auth/pages/register'
+import { RouterProvider } from 'react-router/dom';
+import{router} from './app.routes'
+
 
 function App() {
-  
-
-  return <Register></Register>
+  return <RouterProvider router={router}/>
 }
 
 export default App
