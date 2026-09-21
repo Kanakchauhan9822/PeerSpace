@@ -163,6 +163,7 @@ function logoutUserController(req,res){
         message:'Logged out successfully.'
     })
 }
+
 module.exports= {registerUserController,
                 loginUserController,
                 getMeController,
