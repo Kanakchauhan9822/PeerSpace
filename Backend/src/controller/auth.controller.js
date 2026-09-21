@@ -151,7 +151,20 @@ async function getMeController(req,res){
         })
     }
 }
+
+function logoutUserController(req,res){
+    res.clearCookie('token',
+        {httpOnly:true,
+         secure:process.env.NODE_ENV==='production',
+         sameSite:'lax',
+         path:'/'
+        })
+    return res.status(200).json({
+        message:'Logged out successfully.'
+    })
+}
 module.exports= {registerUserController,
                 loginUserController,
-                getMeController
+                getMeController,
+                logoutUserController
 }
