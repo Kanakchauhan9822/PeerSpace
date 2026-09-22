@@ -11,3 +11,8 @@ export async function createRoom({name}){
         })
         return response.data;
 }
+
+export async function listRooms(){
+    const response = await api.get('/api/rooms')
+    return response.data
+}

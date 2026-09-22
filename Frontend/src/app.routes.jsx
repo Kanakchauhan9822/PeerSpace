@@ -2,17 +2,14 @@ import {createBrowserRouter} from 'react-router'
 import Register from './features/auth/pages/register'
 import Login from './features/auth/pages/login'
 import Protected from './features/auth/components/Protected';
-import LogoutButton from './features/auth/components/LogoutButton';
-import CreateRooms from './features/rooms/components/CreateRooms';
+import Home from './features/rooms/pages/Home'
 
 export const router=createBrowserRouter([
     {
         path:'/',
         element: (
             <Protected>
-                <h1>PeerSpace</h1>
-                <CreateRooms />
-                <LogoutButton />
+                <Home/>    
             </Protected>
     ),
     },{

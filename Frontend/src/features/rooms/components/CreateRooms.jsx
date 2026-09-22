@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createRoom } from '../services/room.api'
 
-export default function CreateRooms() {
+export default function CreateRooms({onRoomCreated}) {
     const [name, setName] = useState('')
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState('')
@@ -16,6 +16,7 @@ export default function CreateRooms() {
 
         try {
             const data = await createRoom({ name })
+            onRoomCreated(data.room)
             setMessage(data.message)
             setName('')
         } catch (error) {
