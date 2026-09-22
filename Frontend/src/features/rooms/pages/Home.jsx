@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react'
+import { listRooms } from '../services/room.api'
+import CreateRooms from '../components/CreateRooms'
+import LogoutButton from '../../auth/components/LogoutButton'
+
+export default function Home() {
+    const [rooms, setRooms] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+
+    useEffect(() => {
+        let active = true
+
+        async function loadRooms() {
+            try {
+                const data = await listRooms()
+
+                if (active) {
+                    setRooms(data.rooms);
+                }
+            } catch (err) {
+                if (active) {
+                    setError(
+                        err.response?.data?.message ||
+                        'Unable to load rooms. Please try again.'
+                    );
+                }
+            } finally {
+                if (active) {
+                    setLoading(false)
+                }
+            }
+        }
+
+        loadRooms()
+
+        return () => {
+            active = false
+        }
+    }, [])
+
+    return (
+        <main>
+            <h1>PeerSpace</h1>
+
+            <CreateRooms
+            onRoomCreated={(room) => {
+            setRooms((previous) => [room, ...previous]);
+    }}
+/>
+
+            <h2>Your rooms</h2>
+
+            {loading ? (
+                <p>Loading rooms...</p>
+            ) : error ? (
+                <p role="alert">{error}</p>
+            ) : rooms.length === 0 ? (
+                <p>You haven’t joined any rooms yet.</p>
+            ) : (
+                <ul>
+                    {rooms.map((room) => (
+                        <li key={room._id}>{room.name}</li>
+                    ))}
+                </ul>
+            )}
+
+            <LogoutButton />
+        </main>
+    );
+}
