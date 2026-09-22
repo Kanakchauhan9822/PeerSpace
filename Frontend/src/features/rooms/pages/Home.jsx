@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listRooms } from '../services/room.api'
 import CreateRooms from '../components/CreateRooms'
 import LogoutButton from '../../auth/components/LogoutButton'
+import JoinRoom from '../components/JoinRoom';
 
 export default function Home() {
     const [rooms, setRooms] = useState([])
@@ -46,6 +47,18 @@ export default function Home() {
             <CreateRooms
             onRoomCreated={(room) => {
             setRooms((previous) => [room, ...previous]);
+    }}
+/>
+            <JoinRoom
+            onRoomJoined={(room) => {
+            setRooms((previous) =>
+            [
+                room,
+                ...previous.filter((item) => item._id !== room._id),
+            ].sort(
+                (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+            )
+        );
     }}
 />
 

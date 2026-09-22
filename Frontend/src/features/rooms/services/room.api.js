@@ -16,3 +16,10 @@ export async function listRooms(){
     const response = await api.get('/api/rooms')
     return response.data
 }
+
+export async function joinRoom({ roomId }) {
+    const response = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/join`
+    );
+
+    return response.data;
+}
