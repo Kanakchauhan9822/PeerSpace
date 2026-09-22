@@ -1,5 +1,5 @@
 const {Router}=require('express')
-const {createRoomController, listRoomController}=require('../controller/room.controller.js')
+const {createRoomController, listRoomController,joinRoomController}=require('../controller/room.controller.js')
 const { authUser } = require('../middlewares/auth.middleware');
 
 
@@ -9,6 +9,8 @@ const roomRouter=Router()
 roomRouter.post('/',authUser, createRoomController)
 
 roomRouter.get('/',authUser,listRoomController)
+
+roomRouter.post('/:roomId/join', authUser, joinRoomController);
 
 
 module.exports=roomRouter
