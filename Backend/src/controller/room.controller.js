@@ -98,8 +98,45 @@ try{
 }
 }
 
+async function getRoomController(req, res) {
+    const { roomId } = req.params;
+
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
+        return res.status(400).json({
+            message: 'Invalid room ID.',
+        });
+    }
+
+    try {
+        const room = await roomModel.findById(roomId);
+
+        if (!room) {
+            return res.status(404).json({
+                message: 'Room not found.',
+            });
+        }
+
+        const isMember = room.members.some(
+            (member) => member.user.toString() === req.user.id
+        );
+
+        if (!isMember) {
+            return res.status(403).json({
+                message: 'You are not a member of this room.',
+            });
+        }
+
+        return res.status(200).json({ room });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Unable to fetch room.',
+        });
+    }
+}
+
 module.exports = {createRoomController,
                   listRoomController,
-                  joinRoomController
+                  joinRoomController,
+                  getRoomController
 }
 
