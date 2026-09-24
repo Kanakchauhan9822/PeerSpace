@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { listRooms } from '../services/room.api'
 import CreateRooms from '../components/CreateRooms'
 import LogoutButton from '../../auth/components/LogoutButton'
-import JoinRoom from '../components/JoinRoom';
+import JoinRoom from '../components/JoinRoom'
+import { Link } from 'react-router'
 
 export default function Home() {
     const [rooms, setRooms] = useState([])
@@ -73,7 +74,11 @@ export default function Home() {
             ) : (
                 <ul>
                     {rooms.map((room) => (
-                        <li key={room._id}>{room.name}</li>
+                       <li key={room._id}>
+                            <Link to={`/rooms/${room._id}`}>
+                                {room.name}
+                            </Link>
+                        </li>
                     ))}
                 </ul>
             )}

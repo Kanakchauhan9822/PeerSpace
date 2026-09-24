@@ -23,3 +23,9 @@ export async function joinRoom({ roomId }) {
 
     return response.data;
 }
+
+export async function getRoom({roomId}){
+    const response=await api.get(`/api/rooms/${encodeURIComponent(roomId)}`)
+    
+    return response.data
+}

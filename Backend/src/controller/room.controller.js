@@ -125,7 +125,10 @@ async function getRoomController(req, res) {
                 message: 'You are not a member of this room.',
             });
         }
-
+        await room.populate([
+            { path: 'host', select: '_id username' },
+            { path: 'members.user', select: '_id username' },
+        ]);
         return res.status(200).json({ room });
     } catch (error) {
         return res.status(500).json({
