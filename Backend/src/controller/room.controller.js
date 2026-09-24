@@ -99,7 +99,7 @@ try{
 }
 
 async function getRoomController(req, res) {
-    const { roomId } = req.params;
+    const { roomId } = req.params
 
     if (!mongoose.isObjectIdOrHexString(roomId)) {
         return res.status(400).json({
@@ -137,9 +137,103 @@ async function getRoomController(req, res) {
     }
 }
 
+async function leaveRoomController(req,res){
+    const {roomId}= req.params
+    
+    if(!mongoose.isObjectIdOrHexString(roomId)){
+        return res.status(400).json({
+            message:"Invalid room id"
+        })
+    }
+
+    try{
+        const room = await roomModel.findById(roomId);
+
+        if (!room) {
+            return res.status(404).json({
+                message: 'Room not found.',
+            });
+        }
+
+         const isMember = room.members.some(
+            (member) => member.user.toString() === req.user.id
+        );
+
+        if (!isMember) {
+            return res.status(403).json({
+                message: 'You are not a member of this room.',
+            });
+        }
+
+        const remainingMembers=room.members
+                                .filter((member)=>member.user.toString()!==req.user.id)
+                                .sort((a,b)=>a.joinedAt-b.joinedAt)
+
+        const isHost = room.host.toString()===req.user.id
+
+        if (remainingMembers.length === 0) {
+            const result = await roomModel.deleteOne({
+                            _id: roomId,
+                            'members.user': req.user.id,
+                             members: { $size: 1 },
+                            })
+            if (result.deletedCount === 0) {
+                return res.status(409).json({
+                    message: 'Room membership changed. Please try leaving again.',
+                });
+            }
+
+            return res.status(200).json({
+                message: 'You left and the empty room was closed.',
+                roomClosed: true,
+            });
+        }
+         const updatedRoom= await roomModel.findOneAndUpdate(
+                                {
+                                _id: roomId,
+                                 host: room.host,
+                                members: { $size: room.members.length },
+                                'members._id': {
+                                $all: room.members.map((member) => member._id),
+                                    },
+                                 },
+                                {
+                                $pull:{
+                                    members:{user:req.user.id}
+                                },
+                                $set:{
+                                        host: isHost ? remainingMembers[0].user:room.host,
+                                    },
+                                },
+                                {
+                                    new:true,
+                                    runValidators:true
+                                })                    
+       
+                            
+        
+            if (!updatedRoom) {
+                 return res.status(409).json({
+                message: 'Room membership or host changed. Please try leaving again.',
+                    })
+                }
+
+             return res.status(200).json({
+                 message: 'You left the room.',
+                           roomClosed: false,
+    })
+      }catch(err){
+        return res.status(500).json({
+            message:"Unable to leave room"
+        })
+    }
+
+}
+
 module.exports = {createRoomController,
                   listRoomController,
                   joinRoomController,
-                  getRoomController
+                  getRoomController,
+                  leaveRoomController
 }
 

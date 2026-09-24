@@ -29,3 +29,11 @@ export async function getRoom({roomId}){
     
     return response.data
 }
+
+export async function leaveRoom({ roomId }) {
+    const response = await api.post(
+        `/api/rooms/${encodeURIComponent(roomId)}/leave`
+    );
+
+    return response.data;
+}
