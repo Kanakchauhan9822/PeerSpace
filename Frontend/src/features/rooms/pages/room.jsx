@@ -1,58 +1,79 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import { getRoom } from '../services/room.api';
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router'
+import { getRoom, leaveRoom } from '../services/room.api'
 
 export default function Room() {
-    const { roomId } = useParams();
-    const [room, setRoom] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const { roomId } = useParams()
+    const [room, setRoom] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+    const navigate = useNavigate();
+    const [leaving, setLeaving] = useState(false);
+    const [leaveError, setLeaveError] = useState('');
 
+async function handleLeave() {
+    if (leaving) return;
+
+    setLeaving(true);
+    setLeaveError('');
+
+    try {
+        await leaveRoom({ roomId });
+        navigate('/', { replace: true });
+    } catch (err) {
+        setLeaveError(
+            err.response?.data?.message ||
+            'Unable to leave room. Please try again.'
+        );
+    } finally {
+        setLeaving(false);
+    }
+}
     useEffect(() => {
-        let active = true;
-
+        let active = true
+  
         async function loadRoom() {
-            setLoading(true);
-            setError('');
-            setRoom(null);
+            setLoading(true)
+            setError('')
+            setRoom(null)
 
             try {
-                const data = await getRoom({ roomId });
+                const data = await getRoom({ roomId })
 
                 if (active) {
-                    setRoom(data.room);
+                    setRoom(data.room)
                 }
             } catch (err) {
                 if (active) {
                     setError(
                         err.response?.data?.message ||
                         'Unable to load room. Please try again.'
-                    );
+                    )
                 }
             } finally {
                 if (active) {
-                    setLoading(false);
+                    setLoading(false)
                 }
             }
         }
 
-        loadRoom();
+        loadRoom()
 
         return () => {
             active = false;
-        };
-    }, [roomId]);
+        }
+    }, [roomId])
 
     if (loading) {
-        return <p>Loading room...</p>;
+        return <p>Loading room...</p>
     }
 
     if (error) {
-        return <p role="alert">{error}</p>;
+        return <p role="alert">{error}</p>
     }
 
     if (!room) {
-        return <p>Room not found.</p>;
+        return <p>Room not found.</p>
     }
 
     return (
@@ -68,6 +89,11 @@ export default function Room() {
                     {member.user?.username ??'Unknown user'}</li>
                 ))}
             </ul>
+            <button type="button" onClick={handleLeave} disabled={leaving}>
+                {leaving ? 'Leaving...' : 'Leave Room'}
+            </button>
+
+            {leaveError && <p role="alert">{leaveError}</p>}
         </main>
     );
 }
