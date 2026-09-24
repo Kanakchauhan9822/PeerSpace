@@ -1,8 +1,9 @@
 import {createBrowserRouter} from 'react-router'
 import Register from './features/auth/pages/register'
 import Login from './features/auth/pages/login'
-import Protected from './features/auth/components/Protected';
+import Protected from './features/auth/components/Protected'
 import Home from './features/rooms/pages/Home'
+import Room from './features/rooms/pages/room'
 
 export const router=createBrowserRouter([
     {
@@ -19,6 +20,14 @@ export const router=createBrowserRouter([
     {
         path:'/register',
         element:<Register/>
+    },
+    {
+    path: '/rooms/:roomId',
+    element: (
+        <Protected>
+            <Room />
+        </Protected>
+    ),
     },
 
 ])
