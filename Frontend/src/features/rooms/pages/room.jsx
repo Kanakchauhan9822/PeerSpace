@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState ,useContext} from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { getRoom, leaveRoom } from '../services/room.api'
+import { AuthContext } from '../../auth/auth.context.jsx'
+import { getRoom, leaveRoom, transferHost } from '../services/room.api'
+
 
 export default function Room() {
     const { roomId } = useParams()
     const [room, setRoom] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
-    const navigate = useNavigate();
-    const [leaving, setLeaving] = useState(false);
-    const [leaveError, setLeaveError] = useState('');
+    const navigate = useNavigate()
+    const [leaving, setLeaving] = useState(false)
+    const [leaveError, setLeaveError] = useState('')
+    const { user } = useContext(AuthContext)
+    const isHost = Boolean(user && room?.host?._id === user._id)
+    const [transferring, setTransferring] = useState(false);
+    const [transferMessage, setTransferMessage] = useState('');
+
 
 async function handleLeave() {
     if (leaving) return;
@@ -81,7 +89,7 @@ async function handleLeave() {
             <h1>{room.name}</h1>
             <p>Room ID: {room._id}</p>
             <p>Host: {room.host?.username ?? 'Unknown user'}</p>
-
+            {isHost && <p>You are the host.</p>}
             <h2>Members</h2>
             <ul>
                 {room.members.map((member) => (

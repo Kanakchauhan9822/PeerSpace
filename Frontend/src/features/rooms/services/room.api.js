@@ -37,3 +37,12 @@ export async function leaveRoom({ roomId }) {
 
     return response.data;
 }
+
+export async function transferHost({ roomId, newHostId }) {
+    const response = await api.post(
+        `/api/rooms/${encodeURIComponent(roomId)}/transfer-host`,
+        { newHostId }
+    );
+
+    return response.data;
+}

@@ -230,10 +230,87 @@ async function leaveRoomController(req,res){
 
 }
 
+async function transferHostController(req, res) {
+    const { roomId } = req.params;
+    const { newHostId } = req.body ?? {};
+
+    if (
+        !mongoose.isObjectIdOrHexString(roomId) ||
+        !mongoose.isObjectIdOrHexString(newHostId)
+    ) {
+        return res.status(400).json({
+            message: 'Invalid room ID or new host ID.',
+        });
+    }
+
+    const targetId = new mongoose.Types.ObjectId(newHostId);
+
+    try {
+        const room = await roomModel.findById(roomId);
+
+        if (!room) {
+            return res.status(404).json({
+                message: 'Room not found.',
+            });
+        }
+
+        if (!room.host.equals(req.user.id)) {
+            return res.status(403).json({
+                message: 'Only the host can transfer host control.',
+            });
+        }
+
+        if (room.host.equals(targetId)) {
+            return res.status(400).json({
+                message: 'You are already the host.',
+            });
+        }
+
+        const isMember = room.members.some(
+            (member) => member.user.equals(targetId)
+        );
+
+        if (!isMember) {
+            return res.status(400).json({
+                message: 'The new host must be a room member.',
+            });
+        }
+
+        const updatedRoom = await roomModel.findOneAndUpdate(
+            {
+                _id: roomId,
+                host: req.user.id,
+                'members.user': targetId,
+            },
+            {
+                $set: { host: targetId },
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedRoom) {
+            return res.status(409).json({
+                message:
+                    'The host or room membership changed. Please refresh and try again.',
+            });
+        }
+
+        return res.status(200).json({
+            message: 'Host transferred successfully.',
+            room: updatedRoom,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            message: 'Unable to transfer host.',
+        });
+    }
+}
+
 module.exports = {createRoomController,
                   listRoomController,
                   joinRoomController,
                   getRoomController,
-                  leaveRoomController
+                  leaveRoomController,
+                  transferHostController
 }
 
