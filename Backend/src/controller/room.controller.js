@@ -77,7 +77,7 @@ try{
                     },
                 },
             },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedRoom) {
@@ -205,10 +205,7 @@ async function leaveRoomController(req,res){
                                         host: isHost ? remainingMembers[0].user:room.host,
                                     },
                                 },
-                                {
-                                    new:true,
-                                    runValidators:true
-                                })                    
+                                { returnDocument: 'after', runValidators: true })                    
        
                             
         
@@ -285,7 +282,7 @@ async function transferHostController(req, res) {
             {
                 $set: { host: targetId },
             },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedRoom) {
