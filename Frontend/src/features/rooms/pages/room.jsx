@@ -1,7 +1,7 @@
 import { useEffect, useState ,useContext} from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AuthContext } from '../../auth/auth.context.jsx'
-import { getRoom, leaveRoom, transferHost } from '../services/room.api'
+import { getRoom, leaveRoom, transferHost,endRoom } from '../services/room.api'
 
 
 export default function Room() {
@@ -16,10 +16,11 @@ export default function Room() {
     const isHost = Boolean(user && room?.host?._id === user._id)
     const [transferring, setTransferring] = useState(false);
     const [transferMessage, setTransferMessage] = useState('');
+    const [ending, setEnding] = useState(false);
+    const [endError, setEndError] = useState('');
 
-
-async function handleLeave() {
-    if (leaving||transferring) return;
+    async function handleLeave() {
+    if (leaving||transferring||ending) return;
 
     setLeaving(true);
     setLeaveError('');
@@ -38,7 +39,7 @@ async function handleLeave() {
     }
 }
     async function handleTransferHost(newHostId) {
-    if (transferring || leaving || !isHost) return;
+    if (transferring || leaving ||ending|| !isHost) return;
 
     const selectedMember = room.members.find(
         (member) => member.user?._id === newHostId
@@ -73,6 +74,31 @@ async function handleLeave() {
         setTransferring(false);
     }
 }
+    async function handleEndRoom() {
+    if (!isHost || ending || leaving || transferring) return;
+
+    const confirmed = window.confirm(
+        'End this room for everyone? The room will be deleted.'
+    );
+
+    if (!confirmed) return;
+
+    setEnding(true);
+    setEndError('');
+
+    try {
+        await endRoom({ roomId });
+        navigate('/', { replace: true });
+    } catch (err) {
+        setEndError(
+            err.response?.data?.message ||
+            'Unable to end room. Please try again.'
+        );
+    } finally {
+        setEnding(false);
+    }
+}
+
 
     useEffect(() => {
         let active = true
@@ -89,12 +115,16 @@ async function handleLeave() {
                     setRoom(data.room)
                 }
             } catch (err) {
-                if (active) {
-                    setError(
-                        err.response?.data?.message ||
-                        'Unable to load room. Please try again.'
-                    )
-                }
+                if (!active)
+                    return 
+                if (err.response?.status === 404) {
+                 navigate('/', { replace: true });
+                return
+                    }
+                setError(
+                     err.response?.data?.message ||
+                    'Unable to load room. Please try again.'
+            )
             } finally {
                 if (active) {
                     setLoading(false)
@@ -107,7 +137,7 @@ async function handleLeave() {
         return () => {
             active = false;
         }
-    }, [roomId])
+    }, [roomId,navigate])
 
     if (loading) {
         return <p>Loading room...</p>
@@ -137,7 +167,7 @@ async function handleLeave() {
                             <button
                     type="button"
                     onClick={() => handleTransferHost(member.user._id)}
-                    disabled={transferring || leaving}
+                    disabled={transferring || leaving||ending}
                         >
                     Make Host
                         </button>
@@ -147,11 +177,23 @@ async function handleLeave() {
                     </ul>
 
                     <p role="status">{transferMessage}</p>
-            <button type="button" onClick={handleLeave} disabled={leaving || transferring}>
+            <button type="button" onClick={handleLeave} 
+                                  disabled={leaving || transferring||ending}>
                 {leaving ? 'Leaving...' : 'Leave Room'}
             </button>
-
             {leaveError && <p role="alert">{leaveError}</p>}
+
+            {isHost && (
+                <button
+                     type="button"
+                      onClick={handleEndRoom}
+                     disabled={ending || leaving || transferring}
+                        >
+                     {ending ? 'Ending...' : 'End Room for Everyone'}
+                </button>
+            )}
+
+                {endError && <p role="alert">{endError}</p>}
         </main>
     );
 }

@@ -9,7 +9,7 @@ export async function createRoom({name}){
     const response=await api.post('/api/rooms',{
                     name
         })
-        return response.data;
+        return response.data
 }
 
 export async function listRooms(){
@@ -21,7 +21,7 @@ export async function joinRoom({ roomId }) {
     const response = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/join`
     );
 
-    return response.data;
+    return response.data
 }
 
 export async function getRoom({roomId}){
@@ -33,7 +33,7 @@ export async function getRoom({roomId}){
 export async function leaveRoom({ roomId }) {
     const response = await api.post(
         `/api/rooms/${encodeURIComponent(roomId)}/leave`
-    );
+    )
 
     return response.data;
 }
@@ -42,7 +42,15 @@ export async function transferHost({ roomId, newHostId }) {
     const response = await api.post(
         `/api/rooms/${encodeURIComponent(roomId)}/transfer-host`,
         { newHostId }
-    );
+    )
+
+    return response.data;
+}
+
+export async function endRoom({ roomId }) {
+    const response = await api.post(
+        `/api/rooms/${encodeURIComponent(roomId)}/end`
+    )
 
     return response.data;
 }
