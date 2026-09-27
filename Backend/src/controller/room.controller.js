@@ -303,11 +303,58 @@ async function transferHostController(req, res) {
     }
 }
 
+async function endRoomController(req,res){
+    const { roomId } = req.params;
+    
+    if(!mongoose.isObjectIdOrHexString(roomId)){
+        return res.status(400).json({
+            message:"Invalid room ID."
+        })
+    }
+
+    try{
+        const room = await roomModel.findById(roomId);
+
+        if (!room) {
+            return res.status(404).json({
+                message: 'Room not found.',
+            });
+        }
+
+        if (!room.host.equals(req.user.id)) {
+            return res.status(403).json({
+                message: 'Only the host can end the room.',
+            });
+        }
+          const result = await roomModel.deleteOne({
+                            _id: roomId,
+                            host: req.user.id,
+                            })
+
+          if(result.deletedCount===0) {
+            return res.status(409).json({
+                message:"Room or host Changed"
+            })
+          }else{
+            return res.status(200).json({
+                message:"Room ended for everyone"
+            })
+          }  
+          
+          
+    }catch(err){
+            return res.status(500).json({
+                message:"Unexpected error",
+            })
+    }
+}
+
 module.exports = {createRoomController,
                   listRoomController,
                   joinRoomController,
                   getRoomController,
                   leaveRoomController,
-                  transferHostController
+                  transferHostController,
+                  endRoomController
 }
 
