@@ -1,7 +1,7 @@
-import { useState } from "react"
-import { register } from "../services/auth.api";
-
-
+import { useContext, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
+import { AuthContext } from '../auth.context.jsx'
+import { register } from "../services/auth.api"
 
 export default function Register(){
 
@@ -10,6 +10,9 @@ const [email, setEmail] = useState('');
 const [password, setPassword] = useState('');
 const [loading, setLoading] = useState(false);
 const [message, setMessage] = useState('');
+const location = useLocation()
+const navigate = useNavigate()
+const { setUser, setError } = useContext(AuthContext)
 
 async function handleSubmit(e) {
     e.preventDefault();
@@ -21,8 +24,16 @@ async function handleSubmit(e) {
 
     try {
         const data = await register({ username, email, password });
-        setMessage(data.message);
-        setPassword('');
+        
+        setUser(data.user)
+        setError('')
+        setPassword('')
+
+        navigate(location.state?.from ||'/',{
+            replace:true,
+            state:{autoJoin:true}
+        })
+        
     } catch (err) {
         setMessage(
             err.response?.data?.message ||
@@ -35,7 +46,8 @@ async function handleSubmit(e) {
 
     return(
         
-        <form onSubmit={
+        <form 
+        onSubmit={
             handleSubmit}>
             <label htmlFor="username">Username</label>
             <input id="username" 
@@ -67,7 +79,12 @@ async function handleSubmit(e) {
             </button>
 
             <p role="status">{message}</p>
-            
+
+                <p>
+            <Link to="/login" state={{ from: location.state?.from }}>
+            Log in
+            </Link>
+                </p>
             </form>
-    )
+  )
 }

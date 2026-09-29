@@ -14,16 +14,27 @@ export default function Room() {
     const [leaveError, setLeaveError] = useState('')
     const { user } = useContext(AuthContext)
     const isHost = Boolean(user && room?.host?._id === user._id)
-    const [transferring, setTransferring] = useState(false);
-    const [transferMessage, setTransferMessage] = useState('');
-    const [ending, setEnding] = useState(false);
-    const [endError, setEndError] = useState('');
+    const [transferring, setTransferring] = useState(false)
+    const [transferMessage, setTransferMessage] = useState('')
+    const [ending, setEnding] = useState(false)
+    const [endError, setEndError] = useState('')
+    const [copyMessage, setCopyMessage] = useState('')
 
+    async function handleCopy(value) {
+    try {
+        await navigator.clipboard.writeText(value);
+         setCopyMessage('Copied!');
+        } catch {
+        setCopyMessage('Unable to copy. Please copy manually.');
+        }
+    }
+   
     async function handleLeave() {
     if (leaving||transferring||ending) return;
 
     setLeaving(true);
     setLeaveError('');
+
 
     try {
         await leaveRoom({ roomId });
@@ -74,6 +85,7 @@ export default function Room() {
         setTransferring(false);
     }
 }
+
     async function handleEndRoom() {
     if (!isHost || ending || leaving || transferring) return;
 
@@ -154,6 +166,23 @@ export default function Room() {
     return (
         <main>
             <h1>{room.name}</h1>
+            <button
+                type="button"
+                 onClick={() => handleCopy(roomId)}
+                    >
+            Copy Room ID
+            </button>
+
+            <button
+             type="button"
+            onClick={() =>
+            handleCopy(`${window.location.origin}/join/${roomId}`)
+            }
+            >
+                 Copy Invite Link
+                </button>
+
+            {copyMessage && <p role="status">{copyMessage}</p>}
             <p>Room ID: {room._id}</p>
             <p>Host: {room.host?.username ?? 'Unknown user'}</p>
             {isHost && <p>You are the host.</p>}
@@ -176,7 +205,7 @@ export default function Room() {
                       ))}
                     </ul>
 
-                    <p role="status">{transferMessage}</p>
+            <p role="status">{transferMessage}</p>
             <button type="button" onClick={handleLeave} 
                                   disabled={leaving || transferring||ending}>
                 {leaving ? 'Leaving...' : 'Leave Room'}

@@ -4,6 +4,8 @@ import Login from './features/auth/pages/login'
 import Protected from './features/auth/components/Protected'
 import Home from './features/rooms/pages/Home'
 import Room from './features/rooms/pages/room'
+import JoinInvite from './features/rooms/pages/JoinInvite'
+
 
 export const router=createBrowserRouter([
     {
@@ -29,5 +31,13 @@ export const router=createBrowserRouter([
         </Protected>
     ),
     },
+    {
+    path: '/join/:roomId',
+    element: (
+        <Protected>
+        <JoinInvite />
+        </Protected>
+    )
+    }
 
 ])

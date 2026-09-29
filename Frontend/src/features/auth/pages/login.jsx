@@ -1,36 +1,38 @@
-import { login } from "../services/auth.api";
-import { useContext, useState } from 'react';
-import { AuthContext } from '../auth.context.jsx';
-import { useNavigate } from 'react-router';
+import { login } from "../services/auth.api"
+import { useContext, useState } from 'react'
+import { AuthContext } from '../auth.context.jsx'
+import { Link, useNavigate, useLocation } from 'react-router'
 
 
 export default function Login(){
 
-const navigate = useNavigate();
+const navigate = useNavigate()
 
-const { setUser ,setError} = useContext(AuthContext);
+const { setUser ,setError} = useContext(AuthContext)
 
-const [email, setEmail] = useState('');
-const [password, setPassword] = useState('');
-const [loading, setLoading] = useState(false);
-const [message, setMessage] = useState('');
+const [email, setEmail] = useState('')
+const [password, setPassword] = useState('')
+const [loading, setLoading] = useState(false)
+const [message, setMessage] = useState('')
+const location = useLocation()
+
 
 async function handleSubmit(e) {
-    e.preventDefault();
+    e.preventDefault()
 
-    if (loading) return;
+    if (loading) return
 
-    setLoading(true);
-    setMessage('');
+    setLoading(true)
+    setMessage('')
 
     try {
-        const data = await login({  email, password });
+        const data = await login({  email, password })
         setUser(data.user)
         setError('')
-        setMessage(data.message);
-        setPassword('');
+        setMessage(data.message)
+        setPassword('')
 
-        navigate('/', { replace: true });
+        navigate(location.state?.from || '/', { replace: true })
     } catch (err) {
         setMessage(
             err.response?.data?.message ||
@@ -68,7 +70,12 @@ async function handleSubmit(e) {
             </button>
 
             <p role="status">{message}</p>
-            
-            </form>
+            <p>
+            Don't have an account?{' '}
+                <Link to="/register" state={{ from: location.state?.from }}>
+                Register
+                </Link>
+            </p>
+        </form>
     )
 }
