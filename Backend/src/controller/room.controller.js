@@ -227,7 +227,7 @@ async function leaveRoomController(req,res){
 
 }
 
-async function transferHostController(req, res) {
+async function transferHostController(req, res){
     const { roomId } = req.params;
     const { newHostId } = req.body ?? {};
 
@@ -348,6 +348,7 @@ async function endRoomController(req,res){
             })
     }
 }
+
 
 module.exports = {createRoomController,
                   listRoomController,
