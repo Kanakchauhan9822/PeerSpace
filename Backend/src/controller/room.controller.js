@@ -87,6 +87,11 @@ try{
             });
         }
 
+        const io=req.app.get('io')
+
+        io.to(`room:${updatedRoom._id}`).emit('room:updated',
+                {roomId:updatedRoom._id.toString()
+        })
         return res.status(200).json({
             message: 'Joined room successfully.',
             room: updatedRoom,
@@ -210,22 +215,39 @@ async function leaveRoomController(req,res){
                             
         
             if (!updatedRoom) {
-                 return res.status(409).json({
+                return res.status(409).json({
                 message: 'Room membership or host changed. Please try leaving again.',
                     })
                 }
 
-             return res.status(200).json({
+                const io = req.app.get('io')
+                const roomChannel = `room:${updatedRoom._id}`
+                const sockets = await io.in(roomChannel).fetchSockets()
+
+                for (const memberSocket of sockets) {
+                    if (memberSocket.data.userId === req.user.id) {
+                     memberSocket.emit('room:left', {
+                     roomId: updatedRoom._id.toString()
+                    })
+
+                  await memberSocket.leave(roomChannel)
+                     }
+                }
+
+                    io.to(roomChannel).emit('room:updated', {
+                    roomId: updatedRoom._id.toString()
+                    })
+
+                return res.status(200).json({
                  message: 'You left the room.',
                            roomClosed: false,
-    })
-      }catch(err){
-        return res.status(500).json({
-            message:"Unable to leave room"
-        })
-    }
-
-}
+                })
+                 }catch(err){
+                return res.status(500).json({
+                message:"Unable to leave room"
+                })
+            }
+        }
 
 async function transferHostController(req, res){
     const { roomId } = req.params;
@@ -292,6 +314,12 @@ async function transferHostController(req, res){
             });
         }
 
+        const io = req.app.get('io')
+
+        io.to(`room:${updatedRoom._id}`).emit('room:updated', {
+        roomId: updatedRoom._id.toString()
+        })
+
         return res.status(200).json({
             message: 'Host transferred successfully.',
             room: updatedRoom,
@@ -336,6 +364,14 @@ async function endRoomController(req,res){
                 message:"Room or host Changed"
             })
           }else{
+            const io = req.app.get('io')
+            const roomChannel = `room:${room._id}`
+
+            io.to(roomChannel).emit('room:ended', {
+            roomId: room._id.toString()
+                })
+
+            io.in(roomChannel).socketsLeave(roomChannel)
             return res.status(200).json({
                 message:"Room ended for everyone"
             })
