@@ -2,7 +2,7 @@ import { useEffect, useState ,useContext} from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AuthContext } from '../../auth/auth.context.jsx'
 import { getRoom, leaveRoom, transferHost,endRoom } from '../services/room.api'
-
+import { createRoomSocket } from '../services/room.socket'
 
 export default function Room() {
     const { roomId } = useParams()
@@ -19,6 +19,9 @@ export default function Room() {
     const [ending, setEnding] = useState(false)
     const [endError, setEndError] = useState('')
     const [copyMessage, setCopyMessage] = useState('')
+    const [onlineUserIds, setOnlineUserIds] = useState([])
+    const [connectionStatus, setConnectionStatus] = useState('Connecting...')
+
 
     async function handleCopy(value) {
     try {
@@ -151,6 +154,126 @@ export default function Room() {
         }
     }, [roomId,navigate])
 
+    useEffect(() => {
+    const socket = createRoomSocket()
+    let active = true
+
+    socket.on('connect', () => {
+        setConnectionStatus('Joining live room...')
+
+       
+        socket.timeout(5000).emit(
+            'room:subscribe',
+            { roomId },
+           async (err, response) => {
+                if (!active || !socket.connected) return
+
+                if (err) {
+                    setConnectionStatus('Room subscription timed out. Please reload.')
+                    return
+                }
+
+                if (!response?.success) {
+                    setConnectionStatus(
+                        response?.message || 'Unable to connect to room updates'
+                    )
+                    return
+                }
+
+                setConnectionStatus('Connected')
+
+                try {
+                 const data = await getRoom({ roomId })
+
+                 if (!active || !socket.connected) return
+
+                 setRoom(data.room)
+                } catch (err) {
+                    if (!active) return
+
+                    if (
+                         err.response?.status === 403 ||
+                         err.response?.status === 404
+                ) {
+                     navigate('/', { replace: true })
+                    return
+                }
+
+                setConnectionStatus('Unable to refresh room details. Please reload.')
+            }
+
+            }
+        )
+    })
+
+    socket.on('room:presence', data => {
+        if (
+            data?.roomId !== roomId.toLowerCase() ||
+            !Array.isArray(data.userIds)
+        ) return
+
+        setOnlineUserIds(data.userIds)
+    })
+
+    socket.on('connect_error', err => {
+        setOnlineUserIds([])
+
+        setConnectionStatus(
+        socket.active
+            ? 'Connection lost. Reconnecting...'
+            : 'Unable to connect. Please log in again.'
+    )
+
+            console.error('Socket connection failed:', err.message)
+    })
+
+    socket.on('disconnect', () => {
+        setOnlineUserIds([])
+        setConnectionStatus('Disconnected — reconnecting...')
+    })
+    
+    
+    socket.on('room:updated', async data => {
+    
+    if (data?.roomId !== roomId.toLowerCase()) return
+
+    try {
+        const response = await getRoom({ roomId })
+
+        if (!active) return
+
+        setRoom(response.room)
+    } catch {
+        if (!active) return
+
+        setConnectionStatus(
+            'Unable to refresh room details. Please reload.'
+            )
+        }
+    })
+    
+    socket.on('room:ended', data => {
+    if (data?.roomId !== roomId.toLowerCase()) return
+
+    navigate('/', { replace: true })
+    })
+
+    socket.on('room:left', data => {
+    if (data?.roomId !== roomId.toLowerCase()) return
+
+    navigate('/', { replace: true })
+    })
+
+    socket.connect()
+
+    return () => {
+        active = false
+        socket.removeAllListeners()
+        socket.disconnect()
+    }}, [roomId,navigate])
+
+
+
     if (loading) {
         return <p>Loading room...</p>
     }
@@ -166,13 +289,14 @@ export default function Room() {
     return (
         <main>
             <h1>{room.name}</h1>
+            <p role="status">{connectionStatus}</p>
             <button
                 type="button"
                  onClick={() => handleCopy(roomId)}
                     >
             Copy Room ID
             </button>
-
+             
             <button
              type="button"
             onClick={() =>
@@ -191,7 +315,14 @@ export default function Room() {
                 {room.members.map((member) => (
                     <li key={member._id}>
                     {member.user?.username ?? 'Unknown user'}
-
+                        <span>
+                            {' — '}
+                            {connectionStatus !== 'Connected'
+                            ? 'Status unavailable'
+                            : onlineUserIds.includes(member.user?._id)
+                            ? 'Online'
+                            : 'Offline'}
+                        </span>
                     {isHost && member.user && member.user._id !== user._id && (
                             <button
                     type="button"
