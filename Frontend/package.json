@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:screen": "node tests/run-screen-sharing.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
