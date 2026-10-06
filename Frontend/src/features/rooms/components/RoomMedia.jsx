@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import RemoteVideo from './RemoteVideo'
 import { getRoomIceServers } from '../services/room.api'
+import { replaceVideoTrack } from '../services/mediaTracks'
 
 export default function RoomMedia({ roomId, socket }) {
     const videoRef = useRef(null)
@@ -8,8 +9,10 @@ export default function RoomMedia({ roomId, socket }) {
     const peerConnectionsRef = useRef(new Map())
     const [starting, setStarting] = useState(false)
     const [mediaReady, setMediaReady] = useState(false)
-    const [micEnabled, setMicEnabled] = useState(true)
-    const [cameraEnabled, setCameraEnabled] = useState(true)
+    const [micEnabled, setMicEnabled] = useState(false)
+    const [cameraEnabled, setCameraEnabled] = useState(false)
+    const [micStarting, setMicStarting] = useState(false)
+    const micStartingRef = useRef(false)
     const [error, setError] = useState('')
     const mountedRef = useRef(false)
     const startingRef = useRef(false)
@@ -19,12 +22,27 @@ export default function RoomMedia({ roomId, socket }) {
     const cameraStartingRef = useRef(false)
     const [remoteStreams, setRemoteStreams] = useState([])
     const [callAttempt, setCallAttempt] = useState(0)
+    const [screenSharing, setScreenSharing] = useState(false)
+    const [screenStarting, setScreenStarting] = useState(false)
+    const screenStreamRef = useRef(null)
+    const screenStartingRef = useRef(false)
+    const cameraBeforeSharingRef = useRef(false)
+    const socketRef = useRef(socket)
+
+    useEffect(() => {
+        socketRef.current = socket
+    }, [socket])
 
     useEffect(() => {
         mountedRef.current = true
 
         return () => {
             mountedRef.current = false
+            screenStreamRef.current?.getTracks().forEach(track => {
+                track.onended = null
+                track.stop()
+            })
+            screenStreamRef.current = null
             streamRef.current?.getTracks().forEach(track => track.stop())
             streamRef.current = null
         }
@@ -56,12 +74,13 @@ export default function RoomMedia({ roomId, socket }) {
             const videoTrack = stream.getVideoTracks()[0]
 
             let videoSender = null
+            let audioSender = null
 
             if (connectionId < peer.socketId) {
-                pc.addTransceiver(audioTrack || 'audio', {
+                audioSender = pc.addTransceiver(audioTrack || 'audio', {
                     direction: 'sendrecv',
                     streams: [stream]
-                })
+                }).sender
 
                 videoSender = pc.addTransceiver(videoTrack || 'video', {
                     direction: 'sendrecv',
@@ -73,6 +92,7 @@ export default function RoomMedia({ roomId, socket }) {
             const entry = {
                 pc,
                 videoSender,
+                audioSender,
                 pendingCandidates: [],
                 remoteStream: new MediaStream(),
                 offerStarted: false,
@@ -328,11 +348,14 @@ export default function RoomMedia({ roomId, socket }) {
 
                     transceiver.direction = 'sendrecv'
                     transceiver.sender.setStreams(stream)
-                    await transceiver.sender.replaceTrack(track || null)
 
                     if (kind === 'video') {
                         entry.videoSender = transceiver.sender
                     }
+                    if (kind === 'audio') {
+                        entry.audioSender = transceiver.sender
+                    }
+                    await transceiver.sender.replaceTrack(track || null)
                 }
 
                 const answer = await pc.createAnswer()
@@ -468,10 +491,12 @@ export default function RoomMedia({ roomId, socket }) {
                     {
                         roomId,
                         cameraEnabled: Boolean(
+                            !screenStreamRef.current &&
                             streamRef.current?.getVideoTracks().some(
                                 track => track.readyState === 'live' && track.enabled
                             )
-                        )
+                        ),
+                        screenSharing: Boolean(screenStreamRef.current)
                     },
                     (err, response) => {
                         if (!active || socket.id !== connectionId) return
@@ -486,6 +511,23 @@ export default function RoomMedia({ roomId, socket }) {
                         if (peerConnectionsRef.current.size === 0) {
                             setCallStatus('Waiting for another call participant')
                         }
+                        // Capture may change while the server checks room membership.
+                        // Publish the current source once joining has completed.
+                        const sharing = Boolean(screenStreamRef.current)
+                        socket.timeout(5000).emit('webrtc:camera-state', {
+                            roomId,
+                            screenSharing: sharing,
+                            cameraEnabled: !sharing && Boolean(
+                                streamRef.current?.getVideoTracks().some(
+                                    track => track.readyState === 'live' && track.enabled
+                                )
+                            )
+                        }, (stateError, stateResponse) => {
+                            if (!active) return
+                            if (stateError || !stateResponse?.success) {
+                                setCallStatus('Unable to synchronize video status. Reconnect the call.')
+                            }
+                        })
                     }
                 )
             } catch {
@@ -517,7 +559,7 @@ export default function RoomMedia({ roomId, socket }) {
     }, [socket, roomId, mediaReady, callAttempt])
 
     async function handleEnableMedia() {
-        if (startingRef.current || streamRef.current) return
+        if (startingRef.current || screenStartingRef.current || streamRef.current) return
 
         startingRef.current = true
         setStarting(true)
@@ -560,26 +602,71 @@ export default function RoomMedia({ roomId, socket }) {
         }
     }
 
-    function handleToggleMic() {
-        const track = streamRef.current?.getAudioTracks()[0]
+    async function handleToggleMic() {
+        const stream = streamRef.current
+        if (!stream || micStartingRef.current) return
+        const existing = stream.getAudioTracks()[0]
+        if (existing?.readyState === 'live') {
+            existing.enabled = !existing.enabled
+            setMicEnabled(existing.enabled)
+            return
+        }
 
-        if (!track || track.readyState === 'ended') return
-
-        track.enabled = !track.enabled
-        setMicEnabled(track.enabled)
+        micStartingRef.current = true
+        setMicStarting(true)
+        setError('')
+        let capture
+        try {
+            capture = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            if (!mountedRef.current || streamRef.current !== stream) {
+                capture.getTracks().forEach(track => track.stop())
+                return
+            }
+            const track = capture.getAudioTracks()[0]
+            if (!track) throw new Error('No microphone track')
+            if (existing) stream.removeTrack(existing)
+            stream.addTrack(track)
+            const results = await Promise.allSettled([...peerConnectionsRef.current.values()].map(async entry => {
+                if (!entry.audioSender || entry.pc.signalingState === 'closed') return
+                try {
+                    await entry.audioSender.replaceTrack(track)
+                } catch (error) {
+                    if (entry.pc.signalingState !== 'closed') throw error
+                }
+            }))
+            if (results.some(result => result.status === 'rejected')) throw new Error('Microphone connection failed')
+            if (!mountedRef.current || streamRef.current !== stream) {
+                track.stop()
+                return
+            }
+            setMicEnabled(true)
+        } catch {
+            capture?.getTracks().forEach(track => {
+                track.stop()
+                stream.removeTrack(track)
+            })
+            if (mountedRef.current) {
+                setMicEnabled(false)
+                setError('Unable to enable the microphone. Check permissions and try again.')
+            }
+        } finally {
+            micStartingRef.current = false
+            if (mountedRef.current) setMicStarting(false)
+        }
     }
 
-    function sendCameraState(enabled) {
-        if (!socket?.connected) return
+    function sendCameraState(enabled, sharing = false) {
+        const currentSocket = socketRef.current
+        if (!currentSocket?.connected) return
 
-        socket.timeout(5000).emit(
+        currentSocket.timeout(5000).emit(
             'webrtc:camera-state',
-            { roomId, cameraEnabled: enabled },
+            { roomId, cameraEnabled: enabled, screenSharing: sharing },
             (err, response) => {
                 if (!mountedRef.current) return
 
                 if (err || !response?.success) {
-                    setError('Unable to update your camera status for others.')
+                    setError('Unable to update your video status for others. Reconnect the call.')
                 }
             }
         )
@@ -588,33 +675,25 @@ export default function RoomMedia({ roomId, socket }) {
     async function handleToggleCamera() {
         const stream = streamRef.current
 
-        if (!stream || cameraStartingRef.current) return
+        if (!stream || cameraStartingRef.current || screenStartingRef.current || screenStreamRef.current) return
 
         const currentTrack = stream.getVideoTracks()[0]
-
-        if (currentTrack) {
-            await Promise.all(
-                [...peerConnectionsRef.current.values()].map(entry =>
-                    entry.videoSender?.replaceTrack(null)
-                )
-            )
-            currentTrack.stop()
-            stream.removeTrack(currentTrack)
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = null
-            }
-
-            setCameraEnabled(false)
-            sendCameraState(false)
-            return
-        }
 
         cameraStartingRef.current = true
         setCameraStarting(true)
         setError('')
 
         try {
+            if (currentTrack) {
+                await replaceVideoTrack(stream, peerConnectionsRef.current, null)
+                currentTrack.stop()
+                if (!mountedRef.current) return
+                if (videoRef.current) videoRef.current.srcObject = null
+                setCameraEnabled(false)
+                sendCameraState(false)
+                return
+            }
+
             const cameraStream = await navigator.mediaDevices.getUserMedia({
                 video: true,
                 audio: false
@@ -626,13 +705,16 @@ export default function RoomMedia({ roomId, socket }) {
             }
 
             const newTrack = cameraStream.getVideoTracks()[0]
-            stream.addTrack(newTrack)
-
-            await Promise.all(
-                [...peerConnectionsRef.current.values()].map(entry =>
-                    entry.videoSender?.replaceTrack(newTrack)
-                )
-            )
+            try {
+                await replaceVideoTrack(stream, peerConnectionsRef.current, newTrack)
+            } catch (err) {
+                newTrack.stop()
+                throw err
+            }
+            if (!mountedRef.current || streamRef.current !== stream) {
+                newTrack.stop()
+                return
+            }
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream
@@ -653,9 +735,128 @@ export default function RoomMedia({ roomId, socket }) {
         }
     }
 
+    async function stopScreenSharing() {
+        const capture = screenStreamRef.current
+        const stream = streamRef.current
+        if (!capture || !stream || screenStartingRef.current) return
+
+        screenStartingRef.current = true
+        setScreenStarting(true)
+        screenStreamRef.current = null
+        capture.getTracks().forEach(track => {
+            track.onended = null
+            track.stop()
+        })
+        setScreenSharing(false)
+        setCameraEnabled(false)
+        sendCameraState(false)
+        if (videoRef.current) videoRef.current.srcObject = null
+
+        let cameraStream
+        try {
+            await replaceVideoTrack(stream, peerConnectionsRef.current, null)
+            if (!mountedRef.current || streamRef.current !== stream) return
+
+            if (cameraBeforeSharingRef.current) {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                if (!mountedRef.current || streamRef.current !== stream) {
+                    cameraStream.getTracks().forEach(track => track.stop())
+                    return
+                }
+                const track = cameraStream.getVideoTracks()[0]
+                await replaceVideoTrack(stream, peerConnectionsRef.current, track)
+                if (!mountedRef.current || streamRef.current !== stream) {
+                    cameraStream.getTracks().forEach(item => item.stop())
+                    return
+                }
+                if (videoRef.current) videoRef.current.srcObject = stream
+                setCameraEnabled(true)
+                sendCameraState(true)
+            }
+        } catch {
+            cameraStream?.getTracks().forEach(track => track.stop())
+            if (mountedRef.current) {
+                setError('Screen sharing stopped, but the camera could not be restored. Try turning it on or reconnecting.')
+            }
+        } finally {
+            screenStartingRef.current = false
+            if (mountedRef.current) setScreenStarting(false)
+        }
+    }
+
+    async function startScreenSharing() {
+        const previousStream = streamRef.current
+        const stream = previousStream || new MediaStream()
+        if (startingRef.current || screenStartingRef.current || cameraStartingRef.current || screenStreamRef.current) return
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+            setError('Screen sharing is not supported in this browser. You can still view other participants’ screens.')
+            return
+        }
+
+        screenStartingRef.current = true
+        setScreenStarting(true)
+        setError('')
+        let capture
+        let installed = false
+        const previousTrack = stream.getVideoTracks()[0]
+        cameraBeforeSharingRef.current = previousTrack?.readyState === 'live'
+
+        try {
+            // Called directly from the click handler, before any other await.
+            capture = await navigator.mediaDevices.getDisplayMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15, max: 30 } },
+                audio: false
+            })
+            if (!mountedRef.current || streamRef.current !== previousStream) {
+                capture.getTracks().forEach(track => track.stop())
+                return
+            }
+            const track = capture.getVideoTracks()[0]
+            if (!track || track.readyState !== 'live') throw new Error('Screen capture ended')
+            streamRef.current = stream
+            track.contentHint = 'detail'
+            screenStreamRef.current = capture
+            track.onended = () => { void stopScreenSharing() }
+
+            await replaceVideoTrack(stream, peerConnectionsRef.current, track)
+            installed = true
+            previousTrack?.stop()
+            if (!mountedRef.current || streamRef.current !== stream) {
+                capture.getTracks().forEach(item => item.stop())
+                return
+            }
+
+            if (videoRef.current) videoRef.current.srcObject = stream
+            setCameraEnabled(false)
+            setScreenSharing(true)
+            setMediaReady(true)
+            // The initial webrtc:ready announces screen-only calls after setup.
+            if (previousStream) sendCameraState(false, true)
+        } catch (err) {
+            capture?.getTracks().forEach(track => {
+                track.onended = null
+                track.stop()
+            })
+            screenStreamRef.current = null
+            if (!previousStream && streamRef.current === stream) streamRef.current = null
+            if (mountedRef.current && err.name !== 'NotAllowedError') {
+                setError('Unable to share this screen. Your previous video source has been kept. Try again.')
+            }
+        } finally {
+            screenStartingRef.current = false
+            if (mountedRef.current) {
+                setScreenStarting(false)
+                // The browser's Stop button may have been pressed during replaceTrack.
+                if (installed && capture?.getVideoTracks()[0]?.readyState === 'ended') {
+                    void stopScreenSharing()
+                }
+            }
+        }
+    }
+
     return (
         <section>
-            <h2>Camera and microphone</h2>
+            <h2>Camera, microphone and screen</h2>
 
             {mediaReady && (
                 <p role="status">
@@ -664,7 +865,13 @@ export default function RoomMedia({ roomId, socket }) {
                         : 'Waiting for room connection...'}
                 </p>
             )}
-            <video ref={videoRef} autoPlay muted playsInline style={{ transform: 'scaleX(-1)' }} />
+            {screenSharing && <p role="status">You are sharing your screen. Microphone controls still apply.</p>}
+            <video ref={videoRef} autoPlay muted playsInline style={{
+                transform: screenSharing ? 'none' : 'scaleX(-1)',
+                display: mediaReady && (cameraEnabled || screenSharing) ? 'block' : 'none',
+                maxWidth: '100%'
+            }} />
+            {mediaReady && !cameraEnabled && !screenSharing && <p>Camera off</p>}
 
             {socket && remoteStreams.map(participant => (
                 <RemoteVideo
@@ -674,15 +881,27 @@ export default function RoomMedia({ roomId, socket }) {
                         peers.find(peer => peer.socketId === participant.socketId)
                             ?.cameraEnabled === true
                     }
+                    screenSharing={
+                        peers.find(peer => peer.socketId === participant.socketId)
+                            ?.screenSharing === true
+                    }
                 />
             ))}
 
             <button
                 type="button"
                 onClick={handleEnableMedia}
-                disabled={starting || mediaReady}
+                disabled={starting || mediaReady || screenStarting}
             >
                 {starting ? 'Starting...' : mediaReady ? 'Media enabled' : 'Enable camera/mic'}
+            </button>
+
+            <button
+                type="button"
+                onClick={screenSharing ? stopScreenSharing : startScreenSharing}
+                disabled={starting || screenStarting || cameraStarting}
+            >
+                {screenStarting ? 'Switching video...' : screenSharing ? 'Stop sharing' : 'Share screen'}
             </button>
 
             {mediaReady && (
@@ -694,14 +913,14 @@ export default function RoomMedia({ roomId, socket }) {
                     >
                         Reconnect call
                     </button>
-                    <button type="button" onClick={handleToggleMic}>
-                        {micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+                    <button type="button" onClick={handleToggleMic} disabled={micStarting}>
+                        {micStarting ? 'Starting microphone...' : micEnabled ? 'Mute microphone' : 'Enable microphone'}
                     </button>
 
                     <button
                         type="button"
                         onClick={handleToggleCamera}
-                        disabled={cameraStarting}
+                        disabled={cameraStarting || screenSharing || screenStarting}
                     >
                         {cameraStarting
                             ? 'Starting camera...'
@@ -709,6 +928,7 @@ export default function RoomMedia({ roomId, socket }) {
                                 ? 'Turn camera off'
                                 : 'Turn camera on'}
                     </button>
+
 
                 </div>
             )}

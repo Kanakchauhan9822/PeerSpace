@@ -319,7 +319,8 @@ function registerRoomEvents(io) {
                     peers.push({
                         socketId: socket.id,
                         userId: socket.data.userId,
-                        cameraEnabled: socket.data.cameraEnabled === true
+                        cameraEnabled: socket.data.cameraEnabled === true,
+                        screenSharing: socket.data.screenSharing === true
                     })
                 }
             }
@@ -332,6 +333,13 @@ function registerRoomEvents(io) {
 
         socket.on('webrtc:ready', async (payload, acknowledge) => {
             if (typeof acknowledge !== 'function') return
+
+            if (
+                (payload?.screenSharing != null && typeof payload.screenSharing !== 'boolean') ||
+                (payload?.cameraEnabled === true && payload?.screenSharing === true)
+            ) {
+                return acknowledge({ success: false, message: 'Invalid video state' })
+            }
 
             const roomId = payload?.roomId
 
@@ -378,6 +386,7 @@ function registerRoomEvents(io) {
                 const previousRoom = socket.data.mediaRoom
                 socket.data.mediaRoom = roomChannel
                 socket.data.cameraEnabled = payload.cameraEnabled === true
+                socket.data.screenSharing = payload.screenSharing === true
 
                 if (previousRoom && previousRoom !== roomChannel) {
                     broadcastMediaPeers(previousRoom)
@@ -451,11 +460,14 @@ function registerRoomEvents(io) {
 
             const roomId = payload?.roomId
             const cameraEnabled = payload?.cameraEnabled
+            const screenSharing = payload?.screenSharing ?? false
 
             if (
                 typeof roomId !== 'string' ||
                 !mongoose.isObjectIdOrHexString(roomId) ||
-                typeof cameraEnabled !== 'boolean'
+                typeof cameraEnabled !== 'boolean' ||
+                typeof screenSharing !== 'boolean' ||
+                (cameraEnabled && screenSharing)
             ) {
                 return acknowledge({
                     success: false,
@@ -480,6 +492,9 @@ function registerRoomEvents(io) {
                 })
             }
 
+            const stateVersion = (socket.data.mediaStateVersion || 0) + 1
+            socket.data.mediaStateVersion = stateVersion
+
             try {
                 const room = await roomModel.findOne({
                     _id: roomId,
@@ -493,7 +508,12 @@ function registerRoomEvents(io) {
                     })
                 }
 
+                // A later update may finish its database check first.
+                if (socket.data.mediaStateVersion !== stateVersion) {
+                    return acknowledge({ success: true })
+                }
                 socket.data.cameraEnabled = cameraEnabled
+                socket.data.screenSharing = screenSharing
                 broadcastMediaPeers(roomChannel)
 
                 acknowledge({ success: true })

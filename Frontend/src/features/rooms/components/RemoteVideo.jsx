@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-export default function RemoteVideo({ stream,cameraEnabled}) {
+export default function RemoteVideo({ stream, cameraEnabled, screenSharing = false }) {
     const videoRef = useRef(null)
     const [needsPlay, setNeedsPlay] = useState(false)
 
@@ -32,15 +32,17 @@ export default function RemoteVideo({ stream,cameraEnabled}) {
 
     return (
         <div>
+            {screenSharing && <p>Shared screen</p>}
             <video
                 ref={videoRef}
                 autoPlay
                 playsInline
-                style={{ transform: 'scaleX(-1)',
-                display: cameraEnabled ? 'block' : 'none' }}
+                style={{ transform: screenSharing ? 'none' : 'scaleX(-1)',
+                display: cameraEnabled || screenSharing ? 'block' : 'none',
+                maxWidth: '100%' }}
             />
 
-            {!cameraEnabled && <p>Camera off</p>}
+            {!cameraEnabled && !screenSharing && <p>Camera off</p>}
 
             {needsPlay && (
                 <button type="button" onClick={handlePlay}>
