@@ -1,8 +1,10 @@
-import { useEffect, useState ,useContext} from 'react'
+import { useEffect, useState, useContext } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AuthContext } from '../../auth/auth.context.jsx'
-import { getRoom, leaveRoom, transferHost,endRoom } from '../services/room.api'
+import { getRoom, leaveRoom, transferHost, endRoom } from '../services/room.api'
 import { createRoomSocket } from '../services/room.socket'
+import RoomMedia from '../components/RoomMedia.jsx'
+
 
 export default function Room() {
     const { roomId } = useParams()
@@ -21,103 +23,103 @@ export default function Room() {
     const [copyMessage, setCopyMessage] = useState('')
     const [onlineUserIds, setOnlineUserIds] = useState([])
     const [connectionStatus, setConnectionStatus] = useState('Connecting...')
-
+    const [mediaSocket, setMediaSocket] = useState(null)
 
     async function handleCopy(value) {
-    try {
-        await navigator.clipboard.writeText(value);
-         setCopyMessage('Copied!');
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopyMessage('Copied!');
         } catch {
-        setCopyMessage('Unable to copy. Please copy manually.');
+            setCopyMessage('Unable to copy. Please copy manually.');
         }
     }
-   
+
     async function handleLeave() {
-    if (leaving||transferring||ending) return;
+        if (leaving || transferring || ending) return;
 
-    setLeaving(true);
-    setLeaveError('');
+        setLeaving(true);
+        setLeaveError('');
 
 
-    try {
-        await leaveRoom({ roomId });
+        try {
+            await leaveRoom({ roomId });
 
-        navigate('/', { replace: true });
-    } catch (err) {
-        setLeaveError(
-            err.response?.data?.message ||
-            'Unable to leave room. Please try again.'
-        );
-    } finally {
-        setLeaving(false);
+            navigate('/', { replace: true });
+        } catch (err) {
+            setLeaveError(
+                err.response?.data?.message ||
+                'Unable to leave room. Please try again.'
+            );
+        } finally {
+            setLeaving(false);
+        }
     }
-}
     async function handleTransferHost(newHostId) {
-    if (transferring || leaving ||ending|| !isHost) return;
+        if (transferring || leaving || ending || !isHost) return;
 
-    const selectedMember = room.members.find(
-        (member) => member.user?._id === newHostId
-    );
-
-    if (!selectedMember?.user) return;
-
-    const confirmed = window.confirm(
-        `Make ${selectedMember.user.username} the host?`
-    );
-
-    if (!confirmed) return;
-
-    setTransferring(true);
-    setTransferMessage('');
-
-    try {
-        const data = await transferHost({ roomId, newHostId });
-
-        setRoom((previous) => ({
-            ...previous,
-            host: selectedMember.user,
-        }));
-
-        setTransferMessage(data.message);
-    } catch (err) {
-        setTransferMessage(
-            err.response?.data?.message ||
-            'Unable to transfer host. Please try again.'
+        const selectedMember = room.members.find(
+            (member) => member.user?._id === newHostId
         );
-    } finally {
-        setTransferring(false);
+
+        if (!selectedMember?.user) return;
+
+        const confirmed = window.confirm(
+            `Make ${selectedMember.user.username} the host?`
+        );
+
+        if (!confirmed) return;
+
+        setTransferring(true);
+        setTransferMessage('');
+
+        try {
+            const data = await transferHost({ roomId, newHostId });
+
+            setRoom((previous) => ({
+                ...previous,
+                host: selectedMember.user,
+            }));
+
+            setTransferMessage(data.message);
+        } catch (err) {
+            setTransferMessage(
+                err.response?.data?.message ||
+                'Unable to transfer host. Please try again.'
+            );
+        } finally {
+            setTransferring(false);
+        }
     }
-}
 
     async function handleEndRoom() {
-    if (!isHost || ending || leaving || transferring) return;
+        if (!isHost || ending || leaving || transferring) return;
 
-    const confirmed = window.confirm(
-        'End this room for everyone? The room will be deleted.'
-    );
-
-    if (!confirmed) return;
-
-    setEnding(true);
-    setEndError('');
-
-    try {
-        await endRoom({ roomId });
-        navigate('/', { replace: true });
-    } catch (err) {
-        setEndError(
-            err.response?.data?.message ||
-            'Unable to end room. Please try again.'
+        const confirmed = window.confirm(
+            'End this room for everyone? The room will be deleted.'
         );
-    } finally {
-        setEnding(false);
+
+        if (!confirmed) return;
+
+        setEnding(true);
+        setEndError('');
+
+        try {
+            await endRoom({ roomId });
+            navigate('/', { replace: true });
+        } catch (err) {
+            setEndError(
+                err.response?.data?.message ||
+                'Unable to end room. Please try again.'
+            );
+        } finally {
+            setEnding(false);
+        }
     }
-}
 
 
     useEffect(() => {
         let active = true
-  
+
         async function loadRoom() {
             setLoading(true)
             setError('')
@@ -131,15 +133,15 @@ export default function Room() {
                 }
             } catch (err) {
                 if (!active)
-                    return 
+                    return
                 if (err.response?.status === 404) {
-                 navigate('/', { replace: true });
-                return
-                    }
+                    navigate('/', { replace: true });
+                    return
+                }
                 setError(
-                     err.response?.data?.message ||
+                    err.response?.data?.message ||
                     'Unable to load room. Please try again.'
-            )
+                )
             } finally {
                 if (active) {
                     setLoading(false)
@@ -152,125 +154,130 @@ export default function Room() {
         return () => {
             active = false;
         }
-    }, [roomId,navigate])
+    }, [roomId, navigate])
 
     useEffect(() => {
-    const socket = createRoomSocket()
-    let active = true
+        const socket = createRoomSocket()
+        let active = true
 
-    socket.on('connect', () => {
-        setConnectionStatus('Joining live room...')
+        socket.on('connect', () => {
+            setConnectionStatus('Joining live room...')
 
-       
-        socket.timeout(5000).emit(
-            'room:subscribe',
-            { roomId },
-           async (err, response) => {
-                if (!active || !socket.connected) return
 
-                if (err) {
-                    setConnectionStatus('Room subscription timed out. Please reload.')
-                    return
+            socket.timeout(5000).emit(
+                'room:subscribe',
+                { roomId },
+                async (err, response) => {
+                    if (!active || !socket.connected) return
+
+                    if (err) {
+                        setConnectionStatus('Room subscription timed out. Please reload.')
+                        return
+                    }
+
+                    if (!response?.success) {
+                        setConnectionStatus(
+                            response?.message || 'Unable to connect to room updates'
+                        )
+                        return
+                    }
+
+                    setConnectionStatus('Connected')
+                    setMediaSocket(socket)
+
+                    try {
+                        const data = await getRoom({ roomId })
+
+                        if (!active || !socket.connected) return
+
+                        setRoom(data.room)
+                    } catch (err) {
+                        if (!active) return
+
+                        if (
+                            err.response?.status === 403 ||
+                            err.response?.status === 404
+                        ) {
+                            navigate('/', { replace: true })
+                            return
+                        }
+
+                        setConnectionStatus('Unable to refresh room details. Please reload.')
+                    }
+
                 }
+            )
+        })
 
-                if (!response?.success) {
-                    setConnectionStatus(
-                        response?.message || 'Unable to connect to room updates'
-                    )
-                    return
-                }
+        socket.on('room:presence', data => {
+            if (
+                data?.roomId !== roomId.toLowerCase() ||
+                !Array.isArray(data.userIds)
+            ) return
 
-                setConnectionStatus('Connected')
+            setOnlineUserIds(data.userIds)
+        })
 
-                try {
-                 const data = await getRoom({ roomId })
+        socket.on('connect_error', err => {
+            setOnlineUserIds([])
 
-                 if (!active || !socket.connected) return
-
-                 setRoom(data.room)
-                } catch (err) {
-                    if (!active) return
-
-                    if (
-                         err.response?.status === 403 ||
-                         err.response?.status === 404
-                ) {
-                     navigate('/', { replace: true })
-                    return
-                }
-
-                setConnectionStatus('Unable to refresh room details. Please reload.')
-            }
-
-            }
-        )
-    })
-
-    socket.on('room:presence', data => {
-        if (
-            data?.roomId !== roomId.toLowerCase() ||
-            !Array.isArray(data.userIds)
-        ) return
-
-        setOnlineUserIds(data.userIds)
-    })
-
-    socket.on('connect_error', err => {
-        setOnlineUserIds([])
-
-        setConnectionStatus(
-        socket.active
-            ? 'Connection lost. Reconnecting...'
-            : 'Unable to connect. Please log in again.'
-    )
+            setConnectionStatus(
+                socket.active
+                    ? 'Connection lost. Reconnecting...'
+                    : 'Unable to connect. Please log in again.'
+            )
 
             console.error('Socket connection failed:', err.message)
-    })
 
-    socket.on('disconnect', () => {
-        setOnlineUserIds([])
-        setConnectionStatus('Disconnected — reconnecting...')
-    })
-    
-    
-    socket.on('room:updated', async data => {
-    
-    if (data?.roomId !== roomId.toLowerCase()) return
+            setMediaSocket(null)
+        })
 
-    try {
-        const response = await getRoom({ roomId })
+        socket.on('disconnect', () => {
+            setOnlineUserIds([])
+            setConnectionStatus('Disconnected — reconnecting...')
+            setMediaSocket(null)
+        })
 
-        if (!active) return
 
-        setRoom(response.room)
-    } catch {
-        if (!active) return
+        socket.on('room:updated', async data => {
 
-        setConnectionStatus(
-            'Unable to refresh room details. Please reload.'
-            )
+            if (data?.roomId !== roomId.toLowerCase()) return
+
+            try {
+                const response = await getRoom({ roomId })
+
+                if (!active) return
+
+                setRoom(response.room)
+            } catch {
+                if (!active) return
+
+                setConnectionStatus(
+                    'Unable to refresh room details. Please reload.'
+                )
+            }
+        })
+
+        socket.on('room:ended', data => {
+            if (data?.roomId !== roomId.toLowerCase()) return
+
+            navigate('/', { replace: true })
+        })
+
+        socket.on('room:left', data => {
+            if (data?.roomId !== roomId.toLowerCase()) return
+
+            navigate('/', { replace: true })
+        })
+
+        socket.connect()
+
+        return () => {
+            active = false
+            socket.removeAllListeners()
+            socket.disconnect()
         }
-    })
-    
-    socket.on('room:ended', data => {
-    if (data?.roomId !== roomId.toLowerCase()) return
-
-    navigate('/', { replace: true })
-    })
-
-    socket.on('room:left', data => {
-    if (data?.roomId !== roomId.toLowerCase()) return
-
-    navigate('/', { replace: true })
-    })
-
-    socket.connect()
-
-    return () => {
-        active = false
-        socket.removeAllListeners()
-        socket.disconnect()
-    }}, [roomId,navigate])
+    }, [roomId, navigate])
 
 
 
@@ -290,21 +297,22 @@ export default function Room() {
         <main>
             <h1>{room.name}</h1>
             <p role="status">{connectionStatus}</p>
+            <RoomMedia roomId={roomId} socket={mediaSocket} />
             <button
                 type="button"
-                 onClick={() => handleCopy(roomId)}
-                    >
-            Copy Room ID
-            </button>
-             
-            <button
-             type="button"
-            onClick={() =>
-            handleCopy(`${window.location.origin}/join/${roomId}`)
-            }
+                onClick={() => handleCopy(roomId)}
             >
-                 Copy Invite Link
-                </button>
+                Copy Room ID
+            </button>
+
+            <button
+                type="button"
+                onClick={() =>
+                    handleCopy(`${window.location.origin}/join/${roomId}`)
+                }
+            >
+                Copy Invite Link
+            </button>
 
             {copyMessage && <p role="status">{copyMessage}</p>}
             <p>Room ID: {room._id}</p>
@@ -314,46 +322,46 @@ export default function Room() {
             <ul>
                 {room.members.map((member) => (
                     <li key={member._id}>
-                    {member.user?.username ?? 'Unknown user'}
+                        {member.user?.username ?? 'Unknown user'}
                         <span>
                             {' — '}
                             {connectionStatus !== 'Connected'
-                            ? 'Status unavailable'
-                            : onlineUserIds.includes(member.user?._id)
-                            ? 'Online'
-                            : 'Offline'}
+                                ? 'Status unavailable'
+                                : onlineUserIds.includes(member.user?._id)
+                                    ? 'Online'
+                                    : 'Offline'}
                         </span>
-                    {isHost && member.user && member.user._id !== user._id && (
+                        {isHost && member.user && member.user._id !== user._id && (
                             <button
-                    type="button"
-                    onClick={() => handleTransferHost(member.user._id)}
-                    disabled={transferring || leaving||ending}
-                        >
-                    Make Host
-                        </button>
+                                type="button"
+                                onClick={() => handleTransferHost(member.user._id)}
+                                disabled={transferring || leaving || ending}
+                            >
+                                Make Host
+                            </button>
                         )}
-                         </li>
-                      ))}
-                    </ul>
+                    </li>
+                ))}
+            </ul>
 
             <p role="status">{transferMessage}</p>
-            <button type="button" onClick={handleLeave} 
-                                  disabled={leaving || transferring||ending}>
+            <button type="button" onClick={handleLeave}
+                disabled={leaving || transferring || ending}>
                 {leaving ? 'Leaving...' : 'Leave Room'}
             </button>
             {leaveError && <p role="alert">{leaveError}</p>}
 
             {isHost && (
                 <button
-                     type="button"
-                      onClick={handleEndRoom}
-                     disabled={ending || leaving || transferring}
-                        >
-                     {ending ? 'Ending...' : 'End Room for Everyone'}
+                    type="button"
+                    onClick={handleEndRoom}
+                    disabled={ending || leaving || transferring}
+                >
+                    {ending ? 'Ending...' : 'End Room for Everyone'}
                 </button>
             )}
 
-                {endError && <p role="alert">{endError}</p>}
+            {endError && <p role="alert">{endError}</p>}
         </main>
     );
 }

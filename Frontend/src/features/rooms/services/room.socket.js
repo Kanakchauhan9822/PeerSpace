@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client'
 
 export function createRoomSocket() {
-    return io('http://localhost:3000', {
+    return io({
         withCredentials: true,
         autoConnect: false
     })
