@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const api=axios.create({
-    baseURL:"http://localhost:3000",
+    baseURL:'/',
     withCredentials:true
 })
 
@@ -53,4 +53,12 @@ export async function endRoom({ roomId }) {
     )
 
     return response.data;
+}
+
+export async function getRoomIceServers({ roomId }) {
+    const response = await api.get(
+        `/api/rooms/${encodeURIComponent(roomId)}/ice-servers`
+    )
+
+    return response.data
 }

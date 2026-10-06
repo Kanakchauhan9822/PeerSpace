@@ -1,70 +1,69 @@
-const mongoose= require('mongoose')
-const roomModel =require("../models/room.model.js")
+const mongoose = require('mongoose')
+const roomModel = require("../models/room.model.js")
 
 
-async function createRoomController(req,res){
-    const {name}=req.body ?? {}
-    if(
-        typeof name !="string" || 
-        name.trim()===""
-    )
-        {
-            return res.status(400).json({
-                message:"Invalid name"
-            })
-        }
+async function createRoomController(req, res) {
+    const { name } = req.body ?? {}
+    if (
+        typeof name != "string" ||
+        name.trim() === ""
+    ) {
+        return res.status(400).json({
+            message: "Invalid name"
+        })
+    }
 
-    try{
-        const room= await roomModel.create({
-            name:name.trim(),
-            host:req.user.id,
-            members:[{ user:req.user.id}]
-        }) 
-        
+    try {
+        const room = await roomModel.create({
+            name: name.trim(),
+            host: req.user.id,
+            members: [{ user: req.user.id }]
+        })
+
         return res.status(201).json({
-        message:"Room created successfully",room
-            })
-        
-    }catch(err){
+            message: "Room created successfully", room
+        })
+
+    } catch (err) {
         return res.status(500).json({
-            message:"Unable to create room"
+            message: "Unable to create room"
         })
     }
 }
 
-async function listRoomController(req,res){
-    try{
-        const rooms=await roomModel
-                    .find({'members.user':req.user.id})
-                    .sort({createdAt:-1})
+async function listRoomController(req, res) {
+    try {
+        const rooms = await roomModel
+            .find({ 'members.user': req.user.id })
+            .sort({ createdAt: -1 })
 
         return res.status(200).json({
-            message:"rooms",rooms
-        })        
-    }catch(err){
+            message: "rooms", rooms
+        })
+    } catch (err) {
         return res.status(500).json({
-            message:"Unable to fetch rooms."
+            message: "Unable to fetch rooms."
         })
     }
 }
 
-async function joinRoomController(req,res){
-const {roomId}= req.params
+async function joinRoomController(req, res) {
+    const { roomId } = req.params
 
-if(!mongoose.isObjectIdOrHexString(roomId)){
-    return res.status(400).json({
-        message:"Invalid Room ID"
-    })
-}
-
-try{
-    const room= await roomModel.findById(roomId)
-    if(!room){
-        return res.status(404).json({
-            message:"Room not found"
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
+        return res.status(400).json({
+            message: "Invalid Room ID"
         })
     }
-    const updatedRoom = await roomModel.findOneAndUpdate(
+
+    try {
+        const room = await roomModel.findById(roomId)
+        if (!room) {
+            return res.status(404).json({
+                message: "Room not found"
+            })
+        }
+        const updatedRoom = await roomModel.findOneAndUpdate(
             {
                 _id: roomId,
                 'members.user': { $ne: req.user.id },
@@ -87,20 +86,21 @@ try{
             });
         }
 
-        const io=req.app.get('io')
+        const io = req.app.get('io')
 
         io.to(`room:${updatedRoom._id}`).emit('room:updated',
-                {roomId:updatedRoom._id.toString()
-        })
+            {
+                roomId: updatedRoom._id.toString()
+            })
         return res.status(200).json({
             message: 'Joined room successfully.',
             room: updatedRoom,
         })
-}catch(err){
-    return res.status(500).json({
-        message:"Unable to join room."
-    })
-}
+    } catch (err) {
+        return res.status(500).json({
+            message: "Unable to join room."
+        })
+    }
 }
 
 async function getRoomController(req, res) {
@@ -142,16 +142,16 @@ async function getRoomController(req, res) {
     }
 }
 
-async function leaveRoomController(req,res){
-    const {roomId}= req.params
-    
-    if(!mongoose.isObjectIdOrHexString(roomId)){
+async function leaveRoomController(req, res) {
+    const { roomId } = req.params
+
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
         return res.status(400).json({
-            message:"Invalid room id"
+            message: "Invalid room id"
         })
     }
 
-    try{
+    try {
         const room = await roomModel.findById(roomId);
 
         if (!room) {
@@ -160,7 +160,7 @@ async function leaveRoomController(req,res){
             });
         }
 
-         const isMember = room.members.some(
+        const isMember = room.members.some(
             (member) => member.user.toString() === req.user.id
         );
 
@@ -170,18 +170,18 @@ async function leaveRoomController(req,res){
             });
         }
 
-        const remainingMembers=room.members
-                                .filter((member)=>member.user.toString()!==req.user.id)
-                                .sort((a,b)=>a.joinedAt-b.joinedAt)
+        const remainingMembers = room.members
+            .filter((member) => member.user.toString() !== req.user.id)
+            .sort((a, b) => a.joinedAt - b.joinedAt)
 
-        const isHost = room.host.toString()===req.user.id
+        const isHost = room.host.toString() === req.user.id
 
         if (remainingMembers.length === 0) {
             const result = await roomModel.deleteOne({
-                            _id: roomId,
-                            'members.user': req.user.id,
-                             members: { $size: 1 },
-                            })
+                _id: roomId,
+                'members.user': req.user.id,
+                members: { $size: 1 },
+            })
             if (result.deletedCount === 0) {
                 return res.status(409).json({
                     message: 'Room membership changed. Please try leaving again.',
@@ -193,63 +193,63 @@ async function leaveRoomController(req,res){
                 roomClosed: true,
             });
         }
-         const updatedRoom= await roomModel.findOneAndUpdate(
-                                {
-                                _id: roomId,
-                                 host: room.host,
-                                members: { $size: room.members.length },
-                                'members._id': {
-                                $all: room.members.map((member) => member._id),
-                                    },
-                                 },
-                                {
-                                $pull:{
-                                    members:{user:req.user.id}
-                                },
-                                $set:{
-                                        host: isHost ? remainingMembers[0].user:room.host,
-                                    },
-                                },
-                                { returnDocument: 'after', runValidators: true })                    
-       
-                            
-        
-            if (!updatedRoom) {
-                return res.status(409).json({
+        const updatedRoom = await roomModel.findOneAndUpdate(
+            {
+                _id: roomId,
+                host: room.host,
+                members: { $size: room.members.length },
+                'members._id': {
+                    $all: room.members.map((member) => member._id),
+                },
+            },
+            {
+                $pull: {
+                    members: { user: req.user.id }
+                },
+                $set: {
+                    host: isHost ? remainingMembers[0].user : room.host,
+                },
+            },
+            { returnDocument: 'after', runValidators: true })
+
+
+
+        if (!updatedRoom) {
+            return res.status(409).json({
                 message: 'Room membership or host changed. Please try leaving again.',
-                    })
-                }
+            })
+        }
 
-                const io = req.app.get('io')
-                const roomChannel = `room:${updatedRoom._id}`
-                const sockets = await io.in(roomChannel).fetchSockets()
+        const io = req.app.get('io')
+        const roomChannel = `room:${updatedRoom._id}`
+        const sockets = await io.in(roomChannel).fetchSockets()
 
-                for (const memberSocket of sockets) {
-                    if (memberSocket.data.userId === req.user.id) {
-                     memberSocket.emit('room:left', {
-                     roomId: updatedRoom._id.toString()
-                    })
-
-                  await memberSocket.leave(roomChannel)
-                     }
-                }
-
-                    io.to(roomChannel).emit('room:updated', {
+        for (const memberSocket of sockets) {
+            if (memberSocket.data.userId === req.user.id) {
+                memberSocket.emit('room:left', {
                     roomId: updatedRoom._id.toString()
-                    })
+                })
 
-                return res.status(200).json({
-                 message: 'You left the room.',
-                           roomClosed: false,
-                })
-                 }catch(err){
-                return res.status(500).json({
-                message:"Unable to leave room"
-                })
+                await memberSocket.leave(roomChannel)
             }
         }
 
-async function transferHostController(req, res){
+        io.to(roomChannel).emit('room:updated', {
+            roomId: updatedRoom._id.toString()
+        })
+
+        return res.status(200).json({
+            message: 'You left the room.',
+            roomClosed: false,
+        })
+    } catch (err) {
+        return res.status(500).json({
+            message: "Unable to leave room"
+        })
+    }
+}
+
+async function transferHostController(req, res) {
     const { roomId } = req.params;
     const { newHostId } = req.body ?? {};
 
@@ -317,7 +317,7 @@ async function transferHostController(req, res){
         const io = req.app.get('io')
 
         io.to(`room:${updatedRoom._id}`).emit('room:updated', {
-        roomId: updatedRoom._id.toString()
+            roomId: updatedRoom._id.toString()
         })
 
         return res.status(200).json({
@@ -331,16 +331,16 @@ async function transferHostController(req, res){
     }
 }
 
-async function endRoomController(req,res){
+async function endRoomController(req, res) {
     const { roomId } = req.params;
-    
-    if(!mongoose.isObjectIdOrHexString(roomId)){
+
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
         return res.status(400).json({
-            message:"Invalid room ID."
+            message: "Invalid room ID."
         })
     }
 
-    try{
+    try {
         const room = await roomModel.findById(roomId);
 
         if (!room) {
@@ -354,44 +354,108 @@ async function endRoomController(req,res){
                 message: 'Only the host can end the room.',
             });
         }
-          const result = await roomModel.deleteOne({
-                            _id: roomId,
-                            host: req.user.id,
-                            })
+        const result = await roomModel.deleteOne({
+            _id: roomId,
+            host: req.user.id,
+        })
 
-          if(result.deletedCount===0) {
+        if (result.deletedCount === 0) {
             return res.status(409).json({
-                message:"Room or host Changed"
+                message: "Room or host Changed"
             })
-          }else{
+        } else {
             const io = req.app.get('io')
             const roomChannel = `room:${room._id}`
 
             io.to(roomChannel).emit('room:ended', {
-            roomId: room._id.toString()
-                })
+                roomId: room._id.toString()
+            })
 
             io.in(roomChannel).socketsLeave(roomChannel)
             return res.status(200).json({
-                message:"Room ended for everyone"
+                message: "Room ended for everyone"
             })
-          }  
-          
-          
-    }catch(err){
-            return res.status(500).json({
-                message:"Unexpected error",
-            })
+        }
+
+
+    } catch (err) {
+        return res.status(500).json({
+            message: "Unexpected error",
+        })
     }
 }
 
+async function getRoomIceServersController(req, res) {
+    const { roomId } = req.params
 
-module.exports = {createRoomController,
-                  listRoomController,
-                  joinRoomController,
-                  getRoomController,
-                  leaveRoomController,
-                  transferHostController,
-                  endRoomController
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
+        return res.status(400).json({
+            message: 'Invalid room ID'
+        })
+    }
+
+    res.set('Cache-Control', 'no-store')
+
+    try {
+        const room = await roomModel.findById(roomId)
+            .select('members.user')
+            .lean()
+
+        if (!room) {
+            return res.status(404).json({
+                message: 'Room not found'
+            })
+        }
+
+        const isMember = room.members.some(
+            member => member.user.toString() === req.user.id
+        )
+
+        if (!isMember) {
+            return res.status(403).json({
+                message: 'Room membership required'
+            })
+        }
+
+        const {
+            TURN_URL,
+            TURN_USERNAME,
+            TURN_PASSWORD
+        } = process.env
+
+        if (!TURN_URL || !TURN_USERNAME || !TURN_PASSWORD) {
+            return res.status(503).json({
+                message: 'Call relay is not configured'
+            })
+        }
+
+        // Preserve the provider's port, scheme and transport exactly.
+        const configuredUrl = TURN_URL.trim()
+
+        return res.status(200).json({
+            iceServers: [
+                {
+                    urls: [configuredUrl],
+                    username: TURN_USERNAME,
+                    credential: TURN_PASSWORD
+                }
+            ]
+        })
+    } catch {
+        return res.status(500).json({
+            message: 'Unable to load call configuration'
+        })
+    }
+}
+
+module.exports = {
+    createRoomController,
+    listRoomController,
+    joinRoomController,
+    getRoomController,
+    leaveRoomController,
+    transferHostController,
+    endRoomController,
+    getRoomIceServersController
 }
 

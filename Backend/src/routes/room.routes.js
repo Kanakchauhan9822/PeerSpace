@@ -1,5 +1,5 @@
 const {Router}=require('express')
-const {createRoomController, listRoomController,joinRoomController, getRoomController, leaveRoomController,transferHostController,endRoomController}=require('../controller/room.controller.js')
+const {createRoomController, listRoomController,joinRoomController, getRoomController, leaveRoomController,transferHostController,endRoomController,getRoomIceServersController}=require('../controller/room.controller.js')
 const { authUser } = require('../middlewares/auth.middleware');
 
 
@@ -19,5 +19,7 @@ roomRouter.get('/:roomId',authUser,getRoomController)
 roomRouter.post('/:roomId/transfer-host',authUser,transferHostController)
 
 roomRouter.post('/:roomId/end',authUser,endRoomController)
+
+roomRouter.get('/:roomId/ice-servers',authUser,getRoomIceServersController)
 
 module.exports=roomRouter
