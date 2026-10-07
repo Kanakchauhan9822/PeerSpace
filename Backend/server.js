@@ -7,6 +7,7 @@ const port=3000
 const cookieParser = require('cookie-parser')
 const { socketAuth } = require('./src/middlewares/socketAuth.middleware')
 const { registerRoomEvents } = require('./src/sockets/room.socket')
+const messageModel = require('./src/models/message.model')
 
 
 const server = http.createServer(app)
@@ -27,6 +28,7 @@ registerRoomEvents(io)
 async function startServer(){
    try{ 
     await connectToDB()
+    await messageModel.init()
     
     server.listen(port,()=>{
     console.log(`Server is running on port ${port}`)

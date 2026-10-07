@@ -1,5 +1,15 @@
 const mongoose = require('mongoose')
 const roomModel = require("../models/room.model.js")
+const messageModel = require('../models/message.model')
+
+async function removeRoomMessages(roomId) {
+    try {
+        await messageModel.deleteMany({ room: roomId })
+    } catch {
+        // The room is already closed; do not report its deletion as failed.
+        console.error('Unable to clean up messages for a closed room')
+    }
+}
 
 
 async function createRoomController(req, res) {
@@ -188,6 +198,7 @@ async function leaveRoomController(req, res) {
                 });
             }
 
+            await removeRoomMessages(roomId)
             return res.status(200).json({
                 message: 'You left and the empty room was closed.',
                 roomClosed: true,
@@ -372,6 +383,7 @@ async function endRoomController(req, res) {
             })
 
             io.in(roomChannel).socketsLeave(roomChannel)
+            await removeRoomMessages(roomId)
             return res.status(200).json({
                 message: "Room ended for everyone"
             })

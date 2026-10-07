@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
 const frontend = fileURLToPath(new URL('..', import.meta.url))
+const suite = process.argv[2] === 'chat' ? 'chat.browser.js' : 'screen-sharing.browser.js'
 const profile = await mkdtemp(path.join(tmpdir(), 'peerspace-screen-test-'))
 const executable = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 let server, browser, ws
@@ -29,7 +30,7 @@ try {
                 vite.middlewares.use(async (req, res, next) => {
                     if (req.url !== '/__screen-test') return next()
                     const html = await vite.transformIndexHtml('/__screen-test',
-                        '<html><body><script type="module" src="/tests/screen-sharing.browser.js"></script></body></html>')
+                        `<html><body><script type="module" src="/tests/${suite}"></script></body></html>`)
                     res.setHeader('Content-Type', 'text/html')
                     res.end(html)
                 })

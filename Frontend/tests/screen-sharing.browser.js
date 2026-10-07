@@ -18,6 +18,7 @@ let receiver
 let receiverCandidates = []
 let receiverError
 let participantJoined = false
+let remoteSending = false
 function joinParticipant() {
     participantJoined = true
     listeners.get('webrtc:peers')?.({ roomId: 'test-room', peers: [
@@ -35,6 +36,13 @@ async function receiveOffer(payload, callback) {
             })
         }
         await receiver.setRemoteDescription(payload.description)
+        if (remoteSending) {
+            const stream = capture()
+            const transceiver = receiver.getTransceivers().find(item => item.receiver.track.kind === 'video')
+            transceiver.direction = 'sendrecv'
+            transceiver.sender.setStreams(stream)
+            await transceiver.sender.replaceTrack(stream.getVideoTracks()[0])
+        }
         for (const candidate of receiverCandidates.splice(0)) await receiver.addIceCandidate(candidate)
         await receiver.setLocalDescription(await receiver.createAnswer())
         await listeners.get('webrtc:answer')?.({ roomId: 'test-room', fromSocketId: 'zz-receiver',
@@ -92,7 +100,21 @@ Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable:
     if (mode === 'pending') return new Promise(resolve => { resolvePicker = resolve })
     return capture()
 } })
-axios.defaults.adapter = async config => ({ data: { iceServers: [{ urls: 'stun:localhost:9' }] }, status: 200, statusText: 'OK', headers: {}, config })
+axios.defaults.adapter = async config => {
+    let data = { iceServers: [{ urls: 'stun:localhost:9' }] }
+    if (config.url.endsWith('/messages')) {
+        data = { messages: [], nextCursor: null }
+        if (config.method === 'post') {
+            const body = JSON.parse(config.data)
+            const message = { _id: '000000000000000000000001', roomId: 'test-room',
+                sender: { _id: 'local', username: 'Tester' }, text: body.text,
+                clientMessageId: body.clientMessageId, createdAt: new Date().toISOString() }
+            listeners.get('chat:message')?.(message)
+            data = { message }
+        }
+    }
+    return { data, status: 200, statusText: 'OK', headers: {}, config }
+}
 
 const host = document.createElement('div')
 document.body.append(host)
@@ -125,7 +147,19 @@ const drawing = setInterval(() => {
 
 async function run() {
     const { default: RoomMedia } = await import('../src/features/rooms/components/RoomMedia.jsx')
-    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket }))
+    const { default: RoomChat } = await import('../src/features/rooms/components/RoomChat.jsx')
+    root.render(React.createElement(React.Fragment, null,
+        React.createElement(RoomMedia, { roomId: 'test-room', socket }),
+        React.createElement(RoomChat, { roomId: 'test-room', socket, userId: 'local' })))
+    await until(() => listeners.has('webrtc:peers'), 'Receive-only call did not subscribe')
+    remoteSending = true
+    joinParticipant()
+    await until(() => receiver?.connectionState === 'connected' || receiverError, 'Receive-only peer did not connect')
+    assert(!receiverError, receiverError)
+    await until(() => [...host.querySelectorAll('video')].some(video => video !== preview() && video.srcObject?.getVideoTracks().length), 'Remote video did not arrive before local camera')
+    assert(cameraRequests === 0 && button('Enable camera/mic'), 'Watching requested local camera access')
+    passed.push('receives remote video before enabling local camera or screen')
+    remoteSending = false
     mode = 'cancel'
     await click('Share screen')
     assert(cameraRequests === 0 && !button('Reconnect call'), 'Initial picker cancellation started media')
@@ -144,6 +178,19 @@ async function run() {
         if (!screenFrames) await wait(100)
     }
     assert(screenFrames > 0, 'Screen-first call sent no video frames')
+    const connectionBeforeChat = receiver
+    const draft = host.querySelector('textarea')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(draft, 'Chat during screen sharing')
+    draft.dispatchEvent(new Event('input', { bubbles: true }))
+    await click('Send')
+    await until(() => host.querySelector('.room-chat-messages').textContent.includes('Chat during screen sharing'), 'Chat not delivered')
+    await wait(300)
+    assert(receiver === connectionBeforeChat && receiver.connectionState === 'connected', 'Chat restarted the media connection')
+    const afterChat = await receiver.getStats()
+    let framesAfterChat = 0
+    afterChat.forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'video') framesAfterChat = report.framesDecoded || 0 })
+    assert(framesAfterChat > screenFrames, 'Video stopped after sending chat')
+    passed.push('chat delivery keeps the same peer connection and screen frames continue')
     await click('Enable microphone')
     assert(cameraRequests === 0 && preview().srcObject.getAudioTracks()[0]?.readyState === 'live', 'Independent microphone failed')
     await click('Stop sharing')
