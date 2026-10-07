@@ -49,7 +49,11 @@ export default function RoomMedia({ roomId, socket }) {
     }, [])
 
     useEffect(() => {
-        if (!socket?.connected || !mediaReady) return
+        if (!socket?.connected) return
+
+        // Join with empty media so watching never requires camera permission.
+        // Enabling local media restarts this effect with the captured tracks.
+        if (!streamRef.current) streamRef.current = new MediaStream()
 
         let active = true
         const connectionId = socket.id
@@ -559,7 +563,7 @@ export default function RoomMedia({ roomId, socket }) {
     }, [socket, roomId, mediaReady, callAttempt])
 
     async function handleEnableMedia() {
-        if (startingRef.current || screenStartingRef.current || streamRef.current) return
+        if (startingRef.current || screenStartingRef.current || mediaReady) return
 
         startingRef.current = true
         setStarting(true)
@@ -858,7 +862,7 @@ export default function RoomMedia({ roomId, socket }) {
         <section>
             <h2>Camera, microphone and screen</h2>
 
-            {mediaReady && (
+            {(
                 <p role="status">
                     {socket
                         ? `${callStatus} — Other call participants: ${peers.length}`

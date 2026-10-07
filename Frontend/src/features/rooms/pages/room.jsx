@@ -4,6 +4,7 @@ import { AuthContext } from '../../auth/auth.context.jsx'
 import { getRoom, leaveRoom, transferHost, endRoom } from '../services/room.api'
 import { createRoomSocket } from '../services/room.socket'
 import RoomMedia from '../components/RoomMedia.jsx'
+import RoomChat from '../components/RoomChat.jsx'
 
 
 export default function Room() {
@@ -298,6 +299,7 @@ export default function Room() {
             <h1>{room.name}</h1>
             <p role="status">{connectionStatus}</p>
             <RoomMedia roomId={roomId} socket={mediaSocket} />
+            <RoomChat key={roomId} roomId={roomId} socket={mediaSocket} userId={user?._id} />
             <button
                 type="button"
                 onClick={() => handleCopy(roomId)}

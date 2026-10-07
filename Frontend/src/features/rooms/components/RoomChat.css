@@ -1,0 +1,8 @@
+.room-chat { border: 1px solid #aaa; border-radius: 8px; padding: 1rem; margin-block: 1rem; max-width: 42rem; }
+.room-chat-messages { list-style: none; padding: 0; max-height: 24rem; overflow-y: auto; overflow-wrap: anywhere; }
+.room-chat-messages li { border: 1px solid #ccc; border-radius: 6px; padding: .65rem; margin-block: .5rem; }
+.room-chat-messages .room-chat-own { border-inline-start: 4px solid #5578be; }
+.room-chat-meta, .room-chat-actions { display: flex; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.room-chat-meta time { font-size: .85rem; }
+.room-chat-messages p { white-space: pre-wrap; margin-block: .5rem 0; }
+.room-chat textarea { display: block; box-sizing: border-box; width: 100%; resize: vertical; margin-block: .5rem; font: inherit; }
