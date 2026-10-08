@@ -460,6 +460,104 @@ async function getRoomIceServersController(req, res) {
     }
 }
 
+const startTimerController = (req, res) => updateTimer(req, res, 'start')
+const pauseTimerController = (req, res) => updateTimer(req, res, 'pause')
+const resetTimerController = (req, res) => updateTimer(req, res, 'reset')
+const setTimerDurationController = (req, res) => updateTimer(req, res, 'duration')
+
+async function updateTimer(req, res, action) {
+    const { roomId } = req.params
+
+    if (!mongoose.isObjectIdOrHexString(roomId)) {
+        return res.status(400).json({ message: 'Invalid room ID' })
+    }
+
+    try {
+        const room = await roomModel.findById(roomId)
+
+        if (!room) {
+            return res.status(404).json({ message: 'Room not found' })
+        }
+
+        if (room.host.toString() !== req.user.id) {
+            return res.status(403).json({
+                message: 'Only the host can control the timer'
+            })
+        }
+
+        const now = Date.now()
+        const timer = room.timer
+        const running = timer.status === 'running' && new Date(timer.endsAt).getTime() > now
+        if ((action === 'start' && running) || (action === 'pause' && !running)) {
+            return res.status(409).json({ message: 'Timer state changed. Refresh the room and try again.' })
+        }
+
+        let durationSeconds = timer.durationSeconds
+        if (action === 'duration' || (action === 'start' && req.body?.minutes !== undefined)) {
+            const minutes = req.body?.minutes
+            if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
+                return res.status(400).json({ message: 'Choose a whole number of minutes from 1 to 180' })
+            }
+            if (timer.status !== 'idle') {
+                return res.status(409).json({ message: 'Reset the timer before changing its duration' })
+            }
+            durationSeconds = minutes * 60
+        }
+
+        let remainingSeconds = durationSeconds
+        let status = 'idle'
+        let endsAt = null
+        if (action === 'start') {
+            remainingSeconds = timer.status === 'paused' && timer.remainingSeconds > 0
+                ? timer.remainingSeconds : durationSeconds
+            status = 'running'
+            endsAt = new Date(now + remainingSeconds * 1000)
+        } else if (action === 'pause') {
+            remainingSeconds = Math.max(0, (new Date(timer.endsAt).getTime() - now) / 1000)
+            status = 'paused'
+        }
+
+        const updatedRoom = await roomModel.findOneAndUpdate(
+            {
+                _id: roomId,
+                host: req.user.id,
+                updatedAt: room.updatedAt
+            },
+            {
+                $set: {
+                    'timer.durationSeconds': durationSeconds,
+                    'timer.status': status,
+                    'timer.endsAt': endsAt,
+                    'timer.remainingSeconds': remainingSeconds
+                }
+            },
+            { returnDocument: 'after', runValidators: true }
+        )
+
+        if (!updatedRoom) {
+            return res.status(409).json({
+                message: 'Room changed. Please try again.'
+            })
+        }
+
+        const data = {
+            roomId: updatedRoom._id.toString(),
+            timer: updatedRoom.timer,
+            serverNow: new Date().toISOString()
+        }
+
+        req.app.get('io').to(`room:${updatedRoom._id}`)
+            .emit('timer:updated', data)
+
+        return res.status(200).json(data)
+    } catch {
+        return res.status(500).json({
+            message: 'Unable to update the timer'
+        })
+    }
+}
+
+
 module.exports = {
     createRoomController,
     listRoomController,
@@ -468,6 +566,10 @@ module.exports = {
     leaveRoomController,
     transferHostController,
     endRoomController,
-    getRoomIceServersController
+    getRoomIceServersController,
+    startTimerController,
+    pauseTimerController,
+    resetTimerController,
+    setTimerDurationController
 }
 

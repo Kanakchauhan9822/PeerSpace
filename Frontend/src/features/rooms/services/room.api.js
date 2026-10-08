@@ -62,3 +62,27 @@ export async function getRoomIceServers({ roomId }) {
 
     return response.data
 }
+
+export async function startTimer({ roomId, minutes }) {
+    const response = await api.post(
+        `/api/rooms/${encodeURIComponent(roomId)}/timer/start`,
+        { minutes }
+    )
+
+    return response.data
+}
+
+export async function pauseTimer({ roomId }) {
+    const response = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/timer/pause`)
+    return response.data
+}
+
+export async function resetTimer({ roomId }) {
+    const response = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/timer/reset`)
+    return response.data
+}
+
+export async function setTimerDuration({ roomId, minutes }) {
+    const response = await api.post('/api/rooms/' + encodeURIComponent(roomId) + '/timer/duration', { minutes })
+    return response.data
+}

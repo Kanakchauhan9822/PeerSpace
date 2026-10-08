@@ -25,7 +25,28 @@ const roomSchema= new mongoose.Schema(
             default: Date.now,
                   },
          },
-    ]
+    ],
+   timer: {
+        durationSeconds: {
+            type: Number,
+            default: 25 * 60,
+            min: 1
+        },
+        status: {
+            type: String,
+            enum: ['idle', 'running', 'paused'],
+            default: 'idle'
+        },
+        endsAt: {
+            type: Date,
+            default: null
+        },
+        remainingSeconds: {
+            type: Number,
+            default: 25 * 60,
+            min: 0
+        }
+    }
  } ,
 
  {timestamps:true}
