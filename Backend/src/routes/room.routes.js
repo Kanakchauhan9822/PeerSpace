@@ -2,6 +2,7 @@ const {Router}=require('express')
 const {createRoomController, listRoomController,joinRoomController, getRoomController, leaveRoomController,transferHostController,endRoomController,getRoomIceServersController}=require('../controller/room.controller.js')
 const { authUser } = require('../middlewares/auth.middleware');
 const { listMessages, sendMessage } = require('../controller/message.controller')
+const { startTimerController, pauseTimerController, resetTimerController, setTimerDurationController } = require('../controller/room.controller.js')
 
 
 const roomRouter=Router()
@@ -25,5 +26,10 @@ roomRouter.get('/:roomId/ice-servers',authUser,getRoomIceServersController)
 
 roomRouter.get('/:roomId/messages', authUser, listMessages)
 roomRouter.post('/:roomId/messages', authUser, sendMessage)
+roomRouter.post('/:roomId/timer/start', authUser, startTimerController)
+roomRouter.post('/:roomId/timer/pause', authUser, pauseTimerController)
+roomRouter.post('/:roomId/timer/reset', authUser, resetTimerController)
+
+roomRouter.post('/:roomId/timer/duration', authUser, setTimerDurationController)
 
 module.exports=roomRouter

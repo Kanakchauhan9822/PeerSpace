@@ -1,10 +1,11 @@
 import { useEffect, useState, useContext } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AuthContext } from '../../auth/auth.context.jsx'
-import { getRoom, leaveRoom, transferHost, endRoom } from '../services/room.api'
+import { getRoom, leaveRoom, transferHost, endRoom, startTimer, pauseTimer, resetTimer, setTimerDuration } from '../services/room.api'
 import { createRoomSocket } from '../services/room.socket'
 import RoomMedia from '../components/RoomMedia.jsx'
 import RoomChat from '../components/RoomChat.jsx'
+import RoomTimer from '../components/RoomTimer.jsx'
 
 
 export default function Room() {
@@ -25,6 +26,8 @@ export default function Room() {
     const [onlineUserIds, setOnlineUserIds] = useState([])
     const [connectionStatus, setConnectionStatus] = useState('Connecting...')
     const [mediaSocket, setMediaSocket] = useState(null)
+    const [startingTimer, setStartingTimer] = useState(false)
+    const [timerError, setTimerError] = useState('')
 
     async function handleCopy(value) {
         try {
@@ -55,6 +58,7 @@ export default function Room() {
             setLeaving(false);
         }
     }
+
     async function handleTransferHost(newHostId) {
         if (transferring || leaving || ending || !isHost) return;
 
@@ -280,7 +284,47 @@ export default function Room() {
         }
     }, [roomId, navigate])
 
+        useEffect(() => {
+        if (!mediaSocket) return
 
+        function handleTimerUpdated(data) {
+            if (data?.roomId !== roomId.toLowerCase()) return
+
+            setRoom(previous => previous
+                ? { ...previous, timer: data.timer }
+                : previous
+            )
+        }
+
+        mediaSocket.on('timer:updated', handleTimerUpdated)
+
+        return () => {
+            mediaSocket.off('timer:updated', handleTimerUpdated)
+        }
+    }, [mediaSocket, roomId])
+
+    async function handleTimerAction(action, minutes) {
+        if (!isHost || startingTimer) return
+
+        setStartingTimer(true)
+        setTimerError('')
+
+        try {
+            const request = { start: startTimer, pause: pauseTimer, reset: resetTimer, duration: setTimerDuration }[action]
+            const data = await request({ roomId, minutes })
+
+            setRoom(previous => previous
+                ? { ...previous, timer: data.timer }
+                : previous
+            )
+        } catch (error) {
+            setTimerError(
+                error.response?.data?.message || 'Unable to update timer'
+            )
+        } finally {
+            setStartingTimer(false)
+        }
+    }
 
     if (loading) {
         return <p>Loading room...</p>
@@ -300,6 +344,9 @@ export default function Room() {
             <p role="status">{connectionStatus}</p>
             <RoomMedia roomId={roomId} socket={mediaSocket} />
             <RoomChat key={roomId} roomId={roomId} socket={mediaSocket} userId={user?._id} />
+            <RoomTimer timer={room.timer} isHost={isHost}
+                busy={startingTimer} onAction={handleTimerAction} />
+            {timerError && <p role="alert">{timerError}</p>}
             <button
                 type="button"
                 onClick={() => handleCopy(roomId)}
