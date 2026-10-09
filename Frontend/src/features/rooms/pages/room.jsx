@@ -5,6 +5,7 @@ import { getRoom, leaveRoom, transferHost, endRoom, startTimer, pauseTimer, rese
 import { createRoomSocket } from '../services/room.socket'
 import RoomMedia from '../components/RoomMedia.jsx'
 import RoomChat from '../components/RoomChat.jsx'
+import { removeMember } from '../services/room.api'
 import RoomTimer from '../components/RoomTimer.jsx'
 
 
@@ -18,6 +19,8 @@ export default function Room() {
     const [leaveError, setLeaveError] = useState('')
     const { user } = useContext(AuthContext)
     const isHost = Boolean(user && room?.host?._id === user._id)
+    const [removingMember, setRemovingMember] = useState(null)
+    const [removeError, setRemoveError] = useState('')
     const [transferring, setTransferring] = useState(false)
     const [transferMessage, setTransferMessage] = useState('')
     const [ending, setEnding] = useState(false)
@@ -29,6 +32,24 @@ export default function Room() {
     const [startingTimer, setStartingTimer] = useState(false)
     const [timerError, setTimerError] = useState('')
 
+    async function handleRemoveMember(member) {
+        if (!isHost || removingMember || transferring || leaving || ending) return
+        if (!window.confirm('Remove ' + member.username + ' from this room?')) return
+        setRemovingMember(member._id)
+        setRemoveError('')
+        try {
+            await removeMember({ roomId, memberId: member._id })
+            setRoom(previous => previous ? {
+                ...previous,
+                members: previous.members.filter(item => item.user?._id !== member._id)
+            } : previous)
+        } catch (error) {
+            setRemoveError(error.response?.data?.message || 'Unable to remove participant. Please try again.')
+        } finally {
+            setRemovingMember(null)
+        }
+    }
+
     async function handleCopy(value) {
         try {
             await navigator.clipboard.writeText(value);
@@ -39,7 +60,7 @@ export default function Room() {
     }
 
     async function handleLeave() {
-        if (leaving || transferring || ending) return;
+        if (removingMember || leaving || transferring || ending) return;
 
         setLeaving(true);
         setLeaveError('');
@@ -60,7 +81,7 @@ export default function Room() {
     }
 
     async function handleTransferHost(newHostId) {
-        if (transferring || leaving || ending || !isHost) return;
+        if (removingMember || transferring || leaving || ending || !isHost) return;
 
         const selectedMember = room.members.find(
             (member) => member.user?._id === newHostId
@@ -97,7 +118,7 @@ export default function Room() {
     }
 
     async function handleEndRoom() {
-        if (!isHost || ending || leaving || transferring) return;
+        if (removingMember || !isHost || ending || leaving || transferring) return;
 
         const confirmed = window.confirm(
             'End this room for everyone? The room will be deleted.'
@@ -384,15 +405,23 @@ export default function Room() {
                             <button
                                 type="button"
                                 onClick={() => handleTransferHost(member.user._id)}
-                                disabled={transferring || leaving || ending}
+                                disabled={Boolean(removingMember) || transferring || leaving || ending}
                             >
                                 Make Host
+                            </button>
+                        )}
+                        {isHost && member.user && member.user._id !== user._id && (
+                            <button type="button"
+                                disabled={Boolean(removingMember) || transferring || leaving || ending}
+                                onClick={() => handleRemoveMember(member.user)}>
+                                {removingMember === member.user._id ? 'Removing...' : 'Remove participant'}
                             </button>
                         )}
                     </li>
                 ))}
             </ul>
 
+            {removeError && <p role="alert">{removeError}</p>}
             <p role="status">{transferMessage}</p>
             <button type="button" onClick={handleLeave}
                 disabled={leaving || transferring || ending}>

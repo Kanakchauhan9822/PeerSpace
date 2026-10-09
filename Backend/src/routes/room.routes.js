@@ -1,3 +1,4 @@
+const { removeMemberController } = require('../controller/room.controller.js')
 const {Router}=require('express')
 const {createRoomController, listRoomController,joinRoomController, getRoomController, leaveRoomController,transferHostController,endRoomController,getRoomIceServersController}=require('../controller/room.controller.js')
 const { authUser } = require('../middlewares/auth.middleware');
@@ -31,5 +32,7 @@ roomRouter.post('/:roomId/timer/pause', authUser, pauseTimerController)
 roomRouter.post('/:roomId/timer/reset', authUser, resetTimerController)
 
 roomRouter.post('/:roomId/timer/duration', authUser, setTimerDurationController)
+
+roomRouter.post('/:roomId/remove-member', authUser, removeMemberController)
 
 module.exports=roomRouter

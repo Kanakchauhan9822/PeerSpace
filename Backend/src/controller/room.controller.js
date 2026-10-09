@@ -11,7 +11,6 @@ async function removeRoomMessages(roomId) {
     }
 }
 
-
 async function createRoomController(req, res) {
     const { name } = req.body ?? {}
     if (
@@ -557,6 +556,110 @@ async function updateTimer(req, res, action) {
     }
 }
 
+async function removeMemberController(req, res) {
+    const { roomId } = req.params
+    const { memberId } = req.body ?? {}
+
+    if (
+        !mongoose.isObjectIdOrHexString(roomId) ||
+        !mongoose.isObjectIdOrHexString(memberId)
+    ) {
+        return res.status(400).json({
+            message: 'Invalid room ID or member ID'
+        })
+    }
+
+    const targetId = new mongoose.Types.ObjectId(memberId)
+
+    try {
+        const room = await roomModel.findById(roomId)
+
+        if (!room) {
+            return res.status(404).json({ message: 'Room not found' })
+        }
+
+        if (!room.host.equals(req.user.id)) {
+            return res.status(403).json({
+                message: 'Only the host can remove participants'
+            })
+        }
+
+        if (room.host.equals(targetId)) {
+            return res.status(400).json({
+                message: 'Use Leave Room to leave as host'
+            })
+        }
+
+        const updatedRoom = await roomModel.findOneAndUpdate(
+            {
+                _id: roomId,
+                host: req.user.id,
+                'members.user': targetId
+            },
+            {
+                $pull: { members: { user: targetId } }
+            },
+            { returnDocument: 'after', runValidators: true }
+        )
+
+        if (!updatedRoom) {
+            return res.status(409).json({
+                message: 'Host or membership changed. Refresh and try again.'
+            })
+        }
+
+        const io = req.app.get('io')
+        const normalizedRoomId = updatedRoom._id.toString()
+        const channel = `room:${normalizedRoomId}`
+        const sockets = await io.in(channel).fetchSockets()
+
+        for (const socket of sockets) {
+            if (socket.data.userId !== targetId.toString()) continue
+
+            delete socket.data.mediaRoom
+
+            socket.emit('room:left', {
+                roomId: normalizedRoomId
+            })
+
+            await socket.leave(channel)
+        }
+
+        const remainingSockets = await io.in(channel).fetchSockets()
+
+        io.to(channel).emit('webrtc:peers', {
+            roomId: normalizedRoomId,
+            peers: remainingSockets
+                .filter(socket => socket.data.mediaRoom === channel)
+                .map(socket => ({
+                    socketId: socket.id,
+                    userId: socket.data.userId,
+                    cameraEnabled: socket.data.cameraEnabled === true,
+                    screenSharing: socket.data.screenSharing === true
+                }))
+        })
+
+        io.to(channel).emit('room:presence', {
+            roomId: normalizedRoomId,
+            userIds: [...new Set(
+                remainingSockets.map(socket => socket.data.userId)
+            )]
+        })
+
+        io.to(channel).emit('room:updated', {
+            roomId: normalizedRoomId
+        })
+
+        return res.status(200).json({
+            message: 'Participant removed'
+        })
+    } catch {
+        return res.status(500).json({
+            message: 'Unable to remove participant'
+        })
+    }
+}
+
 
 module.exports = {
     createRoomController,
@@ -570,6 +673,7 @@ module.exports = {
     startTimerController,
     pauseTimerController,
     resetTimerController,
-    setTimerDurationController
+    setTimerDurationController,
+    removeMemberController
 }
 

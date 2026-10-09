@@ -82,6 +82,45 @@ test('real MongoDB persistence and two authenticated socket recipients', {
     const older = (await request(b, `${room.id}/messages?before=${page.nextCursor}`)).body
     assert.equal(new Set([...page.messages, ...older.messages].map(message => message._id)).size, 57)
 
+    // Moderation must remove every tab, revoke HTTP access and update media peers.
+    const secondTab = await connect(b)
+    for (const socket of [sa, sb, secondTab]) {
+        const ready = await socket.timeout(3000).emitWithAck('webrtc:ready', { roomId: room.id, cameraEnabled: false })
+        assert.equal(ready.success, true)
+    }
+    const path = room.id + '/remove-member'
+    assert.equal((await request(b, path, { memberId: a.id })).status, 403)
+    assert.equal((await request(a, path, { memberId: a.id })).status, 400)
+    assert.equal((await request(a, path, { memberId: 'invalid' })).status, 400)
+    assert.equal((await request(a, path, { memberId: new mongoose.Types.ObjectId().toString() })).status, 409)
+    const anonymous = await fetch(origin + '/api/rooms/' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: b.id })
+    })
+    assert.equal(anonymous.status, 401)
+    let leftTabs = 0
+    let peerIds = []
+    sb.on('room:left', () => { leftTabs++ })
+    secondTab.on('room:left', () => { leftTabs++ })
+    sa.on('webrtc:peers', data => { peerIds = data.peers.map(peer => peer.userId) })
+    assert.equal((await request(a, path, { memberId: b.id })).status, 200)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(leftTabs, 2)
+    assert.deepEqual(peerIds, [a.id])
+    const saved = await Room.findById(room.id)
+    assert.equal(saved.members.length, 1)
+    assert.equal(saved.host.toString(), a.id)
+    assert.equal((await request(b, room.id)).status, 403)
+    assert.equal((await request(b, room.id + '/messages')).status, 403)
+    assert.equal((await request(b, room.id + '/messages', { text: 'Forbidden', clientMessageId: crypto.randomUUID() })).status, 403)
+    assert.equal((await secondTab.timeout(3000).emitWithAck('room:subscribe', { roomId: room.id })).success, false)
+    assert.equal((await secondTab.timeout(3000).emitWithAck('webrtc:ready', { roomId: room.id })).success, false)
+    let moderationLeak = false
+    secondTab.on('chat:message', () => { moderationLeak = true })
+    await request(a, room.id + '/messages', { text: 'After removal', clientMessageId: crypto.randomUUID() })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.equal(moderationLeak, false)
+    // Removal is not a ban: explicit joining remains available.
+    assert.equal((await request(b, room.id + '/join', {})).status, 200)
     assert.equal((await request(b, `${room.id}/leave`, {})).status, 200)
     assert.equal((await request(b, `${room.id}/messages`)).status, 403)
     assert.equal((await request(b, `${room.id}/messages`, { text: 'Forbidden', clientMessageId: crypto.randomUUID() })).status, 403)
