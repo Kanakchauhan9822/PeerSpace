@@ -86,3 +86,8 @@ export async function setTimerDuration({ roomId, minutes }) {
     const response = await api.post('/api/rooms/' + encodeURIComponent(roomId) + '/timer/duration', { minutes })
     return response.data
 }
+
+export async function removeMember({ roomId, memberId }) {
+    const response = await api.post('/api/rooms/' + encodeURIComponent(roomId) + '/remove-member', { memberId })
+    return response.data
+}
