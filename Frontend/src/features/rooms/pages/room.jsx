@@ -1,3 +1,5 @@
+import PageShell from '../../../components/PageShell'
+import { Link } from 'react-router'
 import { useEffect, useState, useContext } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { AuthContext } from '../../auth/auth.context.jsx'
@@ -348,98 +350,70 @@ export default function Room() {
     }
 
     if (loading) {
-        return <p>Loading room...</p>
+        return <PageShell><main id="main-content" className="page-wrap py-16"><p role="status" className="panel">Loading your study room...</p></main></PageShell>
     }
 
     if (error) {
-        return <p role="alert">{error}</p>
+        return <PageShell><main id="main-content" className="page-wrap py-16"><p role="alert">{error}</p><Link className="btn" to="/">Back to your rooms</Link></main></PageShell>
     }
 
     if (!room) {
-        return <p>Room not found.</p>
+        return <PageShell><main id="main-content" className="page-wrap py-16"><p className="panel">Room not found.</p></main></PageShell>
     }
 
     return (
-        <main>
-            <h1>{room.name}</h1>
-            <p role="status">{connectionStatus}</p>
-            <RoomMedia roomId={roomId} socket={mediaSocket} />
-            <RoomChat key={roomId} roomId={roomId} socket={mediaSocket} userId={user?._id} />
-            <RoomTimer timer={room.timer} isHost={isHost}
-                busy={startingTimer} onAction={handleTimerAction} />
-            {timerError && <p role="alert">{timerError}</p>}
-            <button
-                type="button"
-                onClick={() => handleCopy(roomId)}
-            >
-                Copy Room ID
-            </button>
+        <PageShell actions={<><span className="badge">{isHost ? 'Hosting' : 'Studying together'}</span><Link className="btn" to="/">Your rooms ↗</Link></>}>
+            <main id="main-content" className="meeting-page mx-auto w-full px-3 pb-8 sm:px-6">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                    <div className="min-w-0"><h1 className="break-words text-2xl font-light">{room.name}</h1><p className="mt-1 text-xs text-muted">Hosted by {room.host?.username ?? 'Unknown user'} · {room.members.length} members</p></div>
+                    <div className="flex flex-wrap gap-2">
+                        <button className="btn" type="button" onClick={() => handleCopy(roomId)}>Copy Room ID</button>
+                        <button className="btn btn-primary" type="button" onClick={() => handleCopy(window.location.origin + '/join/' + roomId)}>Copy Invite Link ↗</button>
+                    </div>
+                </div>
+                {copyMessage && <p role="status" className="mb-4 text-sm text-muted">{copyMessage}</p>}
+                <p role="status" className="badge mb-3"><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{connectionStatus}</p>
+                <RoomTimer timer={room.timer} isHost={isHost} busy={startingTimer} onAction={handleTimerAction} />
+                {timerError && <p role="alert">{timerError}</p>}
+                <div className="meeting-stage mb-5">
+                    <RoomMedia roomId={roomId} socket={mediaSocket} members={room.members} localUserId={user?._id} hostId={room.host?._id} />
+                </div>
+                <div className="grid items-start gap-5 lg:grid-cols-2">
+                    <div className="min-w-0 space-y-5">
 
-            <button
-                type="button"
-                onClick={() =>
-                    handleCopy(`${window.location.origin}/join/${roomId}`)
-                }
-            >
-                Copy Invite Link
-            </button>
+                        <section className="panel" aria-labelledby="members-heading">
+                            <div className="mb-5 flex items-center justify-between"><h2 id="members-heading">Around the table</h2><span className="badge">{room.members.length} members</span></div>
+                            <ul className="divide-y divide-line">
+                                {room.members.map(member => (
+                                    <li key={member._id} className="flex flex-wrap items-center gap-3 py-4">
+                                        <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-full border border-line bg-[#26282a] font-serif text-lg">{(member.user?.username || '?').slice(0, 1).toUpperCase()}</span>
+                                        <div className="min-w-0 flex-1"><p className="break-words text-sm font-semibold">{member.user?.username ?? 'Unknown user'}{member.user?._id === user._id ? ' (you)' : ''}</p><p className="text-xs text-muted">{room.host?._id === member.user?._id ? 'Host · ' : ''}{connectionStatus !== 'Connected' ? 'Status unavailable' : onlineUserIds.includes(member.user?._id) ? 'Online' : 'Offline'}</p></div>
+                                        {isHost && member.user && member.user._id !== user._id && <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                                            <button className="btn !min-h-9 !px-3 !text-xs" type="button" disabled={Boolean(removingMember) || transferring || leaving || ending} onClick={() => handleTransferHost(member.user._id)}>Make Host</button>
+                                            <button className="btn btn-danger !min-h-9 !px-3 !text-xs" type="button" disabled={Boolean(removingMember) || transferring || leaving || ending} onClick={() => handleRemoveMember(member.user)}>{removingMember === member.user._id ? 'Removing...' : 'Remove participant'}</button>
+                                        </div>}
+                                    </li>
+                                ))}
+                            </ul>
+                            {removeError && <p role="alert">{removeError}</p>}
+                            <p role="status" className="text-sm text-muted">{transferMessage}</p>
+                        </section>
+                    </div>
+                    <aside className="min-w-0 space-y-5" aria-label="Conversation">
 
-            {copyMessage && <p role="status">{copyMessage}</p>}
-            <p>Room ID: {room._id}</p>
-            <p>Host: {room.host?.username ?? 'Unknown user'}</p>
-            {isHost && <p>You are the host.</p>}
-            <h2>Members</h2>
-            <ul>
-                {room.members.map((member) => (
-                    <li key={member._id}>
-                        {member.user?.username ?? 'Unknown user'}
-                        <span>
-                            {' — '}
-                            {connectionStatus !== 'Connected'
-                                ? 'Status unavailable'
-                                : onlineUserIds.includes(member.user?._id)
-                                    ? 'Online'
-                                    : 'Offline'}
-                        </span>
-                        {isHost && member.user && member.user._id !== user._id && (
-                            <button
-                                type="button"
-                                onClick={() => handleTransferHost(member.user._id)}
-                                disabled={Boolean(removingMember) || transferring || leaving || ending}
-                            >
-                                Make Host
-                            </button>
-                        )}
-                        {isHost && member.user && member.user._id !== user._id && (
-                            <button type="button"
-                                disabled={Boolean(removingMember) || transferring || leaving || ending}
-                                onClick={() => handleRemoveMember(member.user)}>
-                                {removingMember === member.user._id ? 'Removing...' : 'Remove participant'}
-                            </button>
-                        )}
-                    </li>
-                ))}
-            </ul>
-
-            {removeError && <p role="alert">{removeError}</p>}
-            <p role="status">{transferMessage}</p>
-            <button type="button" onClick={handleLeave}
-                disabled={leaving || transferring || ending}>
-                {leaving ? 'Leaving...' : 'Leave Room'}
-            </button>
-            {leaveError && <p role="alert">{leaveError}</p>}
-
-            {isHost && (
-                <button
-                    type="button"
-                    onClick={handleEndRoom}
-                    disabled={ending || leaving || transferring}
-                >
-                    {ending ? 'Ending...' : 'End Room for Everyone'}
-                </button>
-            )}
-
-            {endError && <p role="alert">{endError}</p>}
-        </main>
-    );
+                        <RoomChat key={roomId} roomId={roomId} socket={mediaSocket} userId={user?._id} />
+                    </aside>
+                </div>
+                <div className="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
+                    <p className="text-xs text-muted">Room ID: {room._id}</p>
+                    <div className="flex flex-wrap gap-2">
+                        <button className="btn" type="button" onClick={handleLeave} disabled={Boolean(removingMember) || leaving || transferring || ending}>{leaving ? 'Leaving...' : 'Leave Room'}</button>
+                        {isHost && <button className="btn btn-danger" type="button" onClick={handleEndRoom} disabled={Boolean(removingMember) || ending || leaving || transferring}>{ending ? 'Ending...' : 'End Room for Everyone'}</button>}
+                    </div>
+                </div>
+                {leaveError && <p role="alert">{leaveError}</p>}
+                {endError && <p role="alert">{endError}</p>}
+            </main>
+        </PageShell>
+    )
 }

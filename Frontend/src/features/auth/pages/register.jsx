@@ -1,3 +1,4 @@
+import AuthLayout from '../../../components/AuthLayout'
 import { useContext, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { AuthContext } from '../auth.context.jsx'
@@ -24,7 +25,7 @@ async function handleSubmit(e) {
 
     try {
         const data = await register({ username, email, password });
-        
+
         setUser(data.user)
         setError('')
         setPassword('')
@@ -33,7 +34,7 @@ async function handleSubmit(e) {
             replace:true,
             state:{autoJoin:true}
         })
-        
+
     } catch (err) {
         setMessage(
             err.response?.data?.message ||
@@ -45,36 +46,37 @@ async function handleSubmit(e) {
 }
 
     return(
-        
-        <form 
+
+        <AuthLayout register>
+        <form
         onSubmit={
             handleSubmit}>
             <label htmlFor="username">Username</label>
-            <input id="username" 
-            name="username" 
-            type="text" 
+            <input id="username"
+            name="username" autoComplete="username" placeholder="Your name"
+            type="text"
             value={username}
             onChange={(e)=>setUsername(e.target.value)}
             required></input>
 
             <label htmlFor="email">Email</label>
-            <input id="email" 
-            name="email" 
-            type="email" 
+            <input id="email"
+            name="email" autoComplete="email" placeholder="you@college.edu"
+            type="email"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
             required></input>
 
             <label htmlFor="password">Password</label>
-            <input id="password" 
-            name="password" 
-            type="password" 
+            <input id="password"
+            name="password"
+            type="password"
             autoComplete="new-password"
             value={password}
             onChange={(e)=>setPassword(e.target.value)}
             required></input>
 
-            <button type="submit" disabled={loading}>
+            <button className="btn btn-primary" type="submit" disabled={loading}>
                 {loading ? 'Registering...' : 'Register'}
             </button>
 
@@ -86,5 +88,6 @@ async function handleSubmit(e) {
             </Link>
                 </p>
             </form>
+        </AuthLayout>
   )
 }

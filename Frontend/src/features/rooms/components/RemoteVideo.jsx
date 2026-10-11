@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import ParticipantAvatar from './ParticipantAvatar'
 
-export default function RemoteVideo({ stream, cameraEnabled, screenSharing = false }) {
+export default function RemoteVideo({ stream, cameraEnabled, screenSharing = false, name = 'Participant', tileStyle }) {
     const videoRef = useRef(null)
     const [needsPlay, setNeedsPlay] = useState(false)
     const [audioBlocked, setAudioBlocked] = useState(false)
@@ -58,8 +59,8 @@ export default function RemoteVideo({ stream, cameraEnabled, screenSharing = fal
     }
 
     return (
-        <div>
-            {screenSharing && <p>Shared screen</p>}
+        <div className="video-tile" style={tileStyle}>
+            <span className="video-label">{name}{screenSharing ? ' · Shared screen' : ''}</span>
             <video
                 ref={videoRef}
                 autoPlay
@@ -69,10 +70,10 @@ export default function RemoteVideo({ stream, cameraEnabled, screenSharing = fal
                 maxWidth: '100%' }}
             />
 
-            {!cameraEnabled && !screenSharing && <p>Camera off</p>}
+            {!cameraEnabled && !screenSharing && <ParticipantAvatar name={name} />}
 
             {(needsPlay || audioBlocked) && (
-                <button type="button" onClick={handlePlay}>
+                <button className="btn absolute top-2 left-2 right-2 !text-xs" type="button" onClick={handlePlay}>
                     {audioBlocked ? 'Enable participant audio' : 'Play participant audio/video'}
                 </button>
             )}

@@ -30,18 +30,20 @@ export default function CreateRooms({onRoomCreated}) {
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form className="room-form panel" onSubmit={handleSubmit}>
+            <h2 className="mb-2">Host a study room</h2>
+            <p className="!mt-0 mb-6 text-sm text-muted">A place for your next focused session.</p>
             <label htmlFor="room-name">Room name</label>
             <input
                 id="room-name"
                 name="name"
-                type="text"
+                type="text" placeholder="e.g. Organic Chemistry revision"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
             />
 
-            <button type="submit" disabled={loading}>
+            <button className="btn btn-primary" type="submit" disabled={loading}>
                 {loading ? 'Creating...' : 'Create Room'}
             </button>
 

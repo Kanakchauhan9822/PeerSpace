@@ -50,6 +50,24 @@ test('real MongoDB persistence and two authenticated socket recipients', {
         return socket
     }
     const [sa, sb] = await Promise.all([connect(a), connect(b)])
+    // A host can approve from the room before either client starts media.
+    const screenRequest = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Host did not receive screen request')), 3000)
+        sa.once('screen:requests', data => { clearTimeout(timer); resolve(data) })
+    })
+    assert.equal((await sb.timeout(3000).emitWithAck('screen:request', { roomId: room.id })).success, true)
+    const screenNotice = await screenRequest
+    assert.equal(screenNotice.requests[0].userId, b.id)
+    const approved = new Promise(resolve => sb.once('screen:decision', resolve))
+    const decision = await sa.timeout(3000).emitWithAck('screen:decide', {
+        roomId: room.id, requestId: screenNotice.requests[0].requestId, allowed: true
+    })
+    assert.equal(decision.success, true)
+    assert.equal((await approved).allowed, true)
+    assert.equal((await sb.timeout(3000).emitWithAck('webrtc:ready', { roomId: room.id, cameraEnabled: false })).success, true)
+    assert.equal((await sb.timeout(3000).emitWithAck('screen:start', { roomId: room.id })).success, true)
+    assert.equal((await sb.timeout(3000).emitWithAck('screen:stop', { roomId: room.id })).success, true)
+
     async function request(user, path, body) {
         const response = await fetch(`${origin}/api/rooms/${path}`, {
             method: body ? 'POST' : 'GET', headers: { Cookie: cookie(user), 'Content-Type': 'application/json' },

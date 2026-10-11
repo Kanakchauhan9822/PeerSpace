@@ -55,7 +55,7 @@ export default function RoomTimer({ timer, isHost, busy, onAction }) {
     const seconds = remainingSeconds % 60
 
     return (
-        <section>
+        <section className="timer-panel">
             <h2>Study timer</h2>
             <p>
                 {String(minutes).padStart(2, '0')}:

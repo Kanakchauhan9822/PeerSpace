@@ -25,11 +25,12 @@ test('screen metadata is validated, authorized, broadcast and ordered', async t 
     const call = (name, payload) => new Promise(resolve => handlers.get(name)(payload, resolve))
 
     assert.equal((await call('webrtc:ready', { roomId, cameraEnabled: true, screenSharing: true })).success, false)
-    assert.equal((await call('webrtc:ready', { roomId, cameraEnabled: false, screenSharing: true })).success, true)
+    socket.data.screenActive = channel
+    assert.equal((await call('webrtc:ready', { roomId, cameraEnabled: true, screenSharing: true })).success, true)
     assert.equal(broadcasts.at(-1).payload.peers[0].screenSharing, true)
 
     assert.equal((await call('webrtc:camera-state', { roomId, cameraEnabled: false, screenSharing: 'yes' })).success, false)
-    assert.equal((await call('webrtc:camera-state', { roomId, cameraEnabled: true, screenSharing: true })).success, false)
+    assert.equal((await call('webrtc:camera-state', { roomId, cameraEnabled: true, screenSharing: true })).success, true)
 
     lookup = async () => null
     assert.equal((await call('webrtc:camera-state', { roomId, cameraEnabled: true, screenSharing: false })).success, false)

@@ -2,20 +2,31 @@ import { useEffect, useRef, useState } from 'react'
 import RemoteVideo from './RemoteVideo'
 import { getRoomIceServers } from '../services/room.api'
 import { replaceVideoTrack } from '../services/mediaTracks'
+import { galleryMembers } from '../services/gallery'
+import ParticipantAvatar from './ParticipantAvatar'
+import MediaControl from './MediaControl'
 
-export default function RoomMedia({ roomId, socket }) {
+export default function RoomMedia({ roomId, socket, members = [], localUserId, hostId }) {
+    const [galleryPage, setGalleryPage] = useState(0)
+    const [maximizedScreen, setMaximizedScreen] = useState(null)
+    const [fullWindowScreen, setFullWindowScreen] = useState(null)
+    const [requestSending, setRequestSending] = useState(false)
+    const [smallScreen, setSmallScreen] = useState(() => window.matchMedia('(max-width: 639px)').matches)
+    useEffect(() => {
+        const query = window.matchMedia('(max-width: 639px)')
+        const update = event => setSmallScreen(event.matches)
+        query.addEventListener('change', update)
+        return () => query.removeEventListener('change', update)
+    }, [])
     const videoRef = useRef(null)
     const streamRef = useRef(null)
     const peerConnectionsRef = useRef(new Map())
-    const [starting, setStarting] = useState(false)
-    const [mediaReady, setMediaReady] = useState(false)
     const [micEnabled, setMicEnabled] = useState(false)
     const [cameraEnabled, setCameraEnabled] = useState(false)
     const [micStarting, setMicStarting] = useState(false)
     const micStartingRef = useRef(false)
     const [error, setError] = useState('')
     const mountedRef = useRef(false)
-    const startingRef = useRef(false)
     const [peers, setPeers] = useState([])
     const [callStatus, setCallStatus] = useState('')
     const [cameraStarting, setCameraStarting] = useState(false)
@@ -23,10 +34,14 @@ export default function RoomMedia({ roomId, socket }) {
     const [remoteStreams, setRemoteStreams] = useState([])
     const [callAttempt, setCallAttempt] = useState(0)
     const [screenSharing, setScreenSharing] = useState(false)
+    const [localScreen, setLocalScreen] = useState(null)
     const [screenStarting, setScreenStarting] = useState(false)
     const screenStreamRef = useRef(null)
     const screenStartingRef = useRef(false)
-    const cameraBeforeSharingRef = useRef(false)
+    const screenMediaRef = useRef(null)
+    const [approval, setApproval] = useState(null)
+    const [requests, setRequests] = useState([])
+    const isHost = Boolean(hostId && localUserId === hostId)
     const socketRef = useRef(socket)
 
     useEffect(() => {
@@ -52,8 +67,9 @@ export default function RoomMedia({ roomId, socket }) {
         if (!socket?.connected) return
 
         // Join with empty media so watching never requires camera permission.
-        // Enabling local media restarts this effect with the captured tracks.
+        // Reserve independent senders for camera and presentation.
         if (!streamRef.current) streamRef.current = new MediaStream()
+        if (!screenMediaRef.current) screenMediaRef.current = new MediaStream()
 
         let active = true
         const connectionId = socket.id
@@ -79,6 +95,7 @@ export default function RoomMedia({ roomId, socket }) {
 
             let videoSender = null
             let audioSender = null
+            let screenSender = null
 
             if (connectionId < peer.socketId) {
                 audioSender = pc.addTransceiver(audioTrack || 'audio', {
@@ -90,15 +107,20 @@ export default function RoomMedia({ roomId, socket }) {
                     direction: 'sendrecv',
                     streams: [stream]
                 }).sender
+                screenSender = pc.addTransceiver(screenMediaRef.current.getVideoTracks()[0] || 'video', {
+                    direction: 'sendrecv', streams: [screenMediaRef.current]
+                }).sender
             }
 
 
             const entry = {
                 pc,
                 videoSender,
+                screenSender,
                 audioSender,
                 pendingCandidates: [],
                 remoteStream: new MediaStream(),
+                remoteScreen: new MediaStream(),
                 offerStarted: false,
                 localCandidates: 0,
                 receivedCandidates: 0,
@@ -168,14 +190,17 @@ export default function RoomMedia({ roomId, socket }) {
                 if (!active) return
                 if (peerConnectionsRef.current.get(peer.socketId) !== entry) return
 
-                entry.remoteStream.addTrack(event.track)
+                const videos = pc.getTransceivers().filter(item => item.receiver.track.kind === 'video')
+                const target = event.track.kind === 'video' && videos.indexOf(event.transceiver) === 1 ? entry.remoteScreen : entry.remoteStream
+                target.addTrack(event.track)
 
                 setRemoteStreams(previous => [
                     ...previous.filter(item => item.socketId !== peer.socketId),
                     {
                         socketId: peer.socketId,
                         userId: peer.userId,
-                        stream: entry.remoteStream
+                        stream: entry.remoteStream,
+                        screenStream: entry.remoteScreen
                     }
                 ])
             }
@@ -227,6 +252,7 @@ export default function RoomMedia({ roomId, socket }) {
             entry.pc.onconnectionstatechange = null
             entry.pc.close()
 
+            entry.remoteScreen.getTracks().forEach(track => track.stop())
             entry.remoteStream.getTracks().forEach(track => track.stop())
 
             if (active) {
@@ -342,19 +368,22 @@ export default function RoomMedia({ roomId, socket }) {
 
                 const stream = streamRef.current
 
+                let videoIndex = 0
                 for (const transceiver of pc.getTransceivers()) {
                     if (transceiver.mid === null) continue
 
                     const kind = transceiver.receiver.track.kind
-                    const track = stream.getTracks().find(
+                    const isScreen = kind === 'video' && videoIndex++ === 1
+                    const source = isScreen ? screenMediaRef.current : stream
+                    const track = source.getTracks().find(
                         item => item.kind === kind && item.readyState === 'live'
                     )
 
                     transceiver.direction = 'sendrecv'
-                    transceiver.sender.setStreams(stream)
+                    transceiver.sender.setStreams(source)
 
                     if (kind === 'video') {
-                        entry.videoSender = transceiver.sender
+                        entry[isScreen ? 'screenSender' : 'videoSender'] = transceiver.sender
                     }
                     if (kind === 'audio') {
                         entry.audioSender = transceiver.sender
@@ -495,7 +524,6 @@ export default function RoomMedia({ roomId, socket }) {
                     {
                         roomId,
                         cameraEnabled: Boolean(
-                            !screenStreamRef.current &&
                             streamRef.current?.getVideoTracks().some(
                                 track => track.readyState === 'live' && track.enabled
                             )
@@ -512,6 +540,7 @@ export default function RoomMedia({ roomId, socket }) {
                             return
                         }
 
+                        socket.emit('screen:list', { roomId }, () => {})
                         if (peerConnectionsRef.current.size === 0) {
                             setCallStatus('Waiting for another call participant')
                         }
@@ -521,7 +550,7 @@ export default function RoomMedia({ roomId, socket }) {
                         socket.timeout(5000).emit('webrtc:camera-state', {
                             roomId,
                             screenSharing: sharing,
-                            cameraEnabled: !sharing && Boolean(
+                            cameraEnabled: Boolean(
                                 streamRef.current?.getVideoTracks().some(
                                     track => track.readyState === 'live' && track.enabled
                                 )
@@ -545,6 +574,17 @@ export default function RoomMedia({ roomId, socket }) {
 
         return () => {
             active = false
+            screenStreamRef.current?.getTracks().forEach(track => { track.onended = null
+                track.stop() })
+            screenStreamRef.current = null
+            screenMediaRef.current?.getTracks().forEach(track => screenMediaRef.current.removeTrack(track))
+            queueMicrotask(() => {
+                if (mountedRef.current) {
+                    setScreenSharing(false)
+                    setLocalScreen(null)
+                    setApproval(null)
+                }
+            })
             for (const socketId of connections.keys()) {
                 removePeer(socketId)
             }
@@ -560,51 +600,7 @@ export default function RoomMedia({ roomId, socket }) {
                 socket.emit('webrtc:leave', () => { })
             }
         }
-    }, [socket, roomId, mediaReady, callAttempt])
-
-    async function handleEnableMedia() {
-        if (startingRef.current || screenStartingRef.current || mediaReady) return
-
-        startingRef.current = true
-        setStarting(true)
-        setError('')
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            })
-
-            if (!mountedRef.current) {
-                stream.getTracks().forEach(track => track.stop())
-                return
-            }
-
-            streamRef.current = stream
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream
-            }
-
-            setMediaReady(true)
-            setMicEnabled(true)
-            setCameraEnabled(true)
-        } catch (err) {
-            if (!mountedRef.current) return
-
-            setError(
-                err.name === 'NotAllowedError'
-                    ? 'Please allow camera and microphone access.'
-                    : 'Unable to access your camera or microphone. Check your devices and try again.'
-            )
-        } finally {
-            startingRef.current = false
-
-            if (mountedRef.current) {
-                setStarting(false)
-            }
-        }
-    }
+    }, [socket, roomId, callAttempt])
 
     async function handleToggleMic() {
         const stream = streamRef.current
@@ -659,7 +655,7 @@ export default function RoomMedia({ roomId, socket }) {
         }
     }
 
-    function sendCameraState(enabled, sharing = false) {
+    function sendCameraState(enabled, sharing = Boolean(screenStreamRef.current)) {
         const currentSocket = socketRef.current
         if (!currentSocket?.connected) return
 
@@ -679,7 +675,7 @@ export default function RoomMedia({ roomId, socket }) {
     async function handleToggleCamera() {
         const stream = streamRef.current
 
-        if (!stream || cameraStartingRef.current || screenStartingRef.current || screenStreamRef.current) return
+        if (!stream || cameraStartingRef.current) return
 
         const currentTrack = stream.getVideoTracks()[0]
 
@@ -739,204 +735,242 @@ export default function RoomMedia({ roomId, socket }) {
         }
     }
 
+    async function screenCommand(event, extra = {}) {
+        const current = socketRef.current
+        if (!current?.connected) throw new Error('Connect to the room first.')
+        return new Promise((resolve, reject) => current.timeout(5000).emit(event, { roomId, ...extra }, (err, result) => {
+            if (err || !result?.success) reject(new Error(result?.message || 'Unable to contact the host. Try again.'))
+            else resolve(result)
+        }))
+    }
+
+    useEffect(() => {
+        if (!socket) return
+        const decision = data => {
+            if (data.roomId !== roomId.toLowerCase()) return
+            setApproval(data.allowed ? { hostId: data.hostId, expiresAt: data.expiresAt } : null)
+            if (!data.allowed) setError('The host declined your screen sharing request.')
+        }
+        const pending = data => { if (data?.roomId === roomId.toLowerCase() && Array.isArray(data.requests)) setRequests(data.requests) }
+        socket.on('screen:decision', decision)
+        socket.on('screen:requests', pending)
+        socket.emit('screen:list', { roomId }, () => {})
+        return () => {
+            socket.off('screen:decision', decision)
+            socket.off('screen:requests', pending)
+        }
+    }, [socket, roomId, hostId, isHost])
+
+    useEffect(() => {
+        if (!approval) return
+        const timeout = setTimeout(() => setApproval(null), approval.expiresAt ? Math.max(0, approval.expiresAt - Date.now()) : 120000)
+        return () => clearTimeout(timeout)
+    }, [approval])
+
+    async function requestScreen() {
+        if (requestSending || approval?.pending) return
+        setRequestSending(true)
+        try {
+            setError('')
+            const result = await screenCommand('screen:request')
+            setApproval(result.allowed ? { hostId, expiresAt: result.expiresAt } : { pending: true })
+        } catch (err) { setError(err.message) }
+        finally { setRequestSending(false) }
+    }
+
+    async function decideScreen(requestId, allowed) {
+        try { await screenCommand('screen:decide', { requestId, allowed }) }
+        catch (err) { setError(err.message) }
+    }
+
     async function stopScreenSharing() {
         const capture = screenStreamRef.current
-        const stream = streamRef.current
-        if (!capture || !stream || screenStartingRef.current) return
+        screenStreamRef.current = null
+        capture?.getTracks().forEach(track => { track.onended = null; track.stop() })
+        setLocalScreen(null)
+        setScreenSharing(false)
+        setApproval(null)
+        try {
+            await replaceVideoTrack(screenMediaRef.current, peerConnectionsRef.current, null, 'screenSender')
+            await screenCommand('screen:stop')
+        } catch (err) { if (mountedRef.current) setError(err.message) }
+    }
 
+    async function startScreenSharing() {
+        if (screenStartingRef.current || screenStreamRef.current) return
+        if (!isHost && (!approval || approval.hostId !== hostId)) {
+            await requestScreen()
+            return
+        }
         screenStartingRef.current = true
         setScreenStarting(true)
-        screenStreamRef.current = null
-        capture.getTracks().forEach(track => {
-            track.onended = null
-            track.stop()
-        })
-        setScreenSharing(false)
-        setCameraEnabled(false)
-        sendCameraState(false)
-        if (videoRef.current) videoRef.current.srcObject = null
-
-        let cameraStream
+        setError('')
+        const currentSocket = socketRef.current
+        const connectionId = currentSocket?.id
+        let capture
         try {
-            await replaceVideoTrack(stream, peerConnectionsRef.current, null)
-            if (!mountedRef.current || streamRef.current !== stream) return
-
-            if (cameraBeforeSharingRef.current) {
-                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-                if (!mountedRef.current || streamRef.current !== stream) {
-                    cameraStream.getTracks().forEach(track => track.stop())
-                    return
-                }
-                const track = cameraStream.getVideoTracks()[0]
-                await replaceVideoTrack(stream, peerConnectionsRef.current, track)
-                if (!mountedRef.current || streamRef.current !== stream) {
-                    cameraStream.getTracks().forEach(item => item.stop())
-                    return
-                }
-                if (videoRef.current) videoRef.current.srcObject = stream
-                setCameraEnabled(true)
-                sendCameraState(true)
+            capture = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+            if (!mountedRef.current || !currentSocket?.connected || currentSocket.id !== connectionId) throw new Error('The call disconnected. Try again.')
+            await screenCommand('screen:start')
+            if (!mountedRef.current || !currentSocket.connected || currentSocket.id !== connectionId) throw new Error('The call disconnected.')
+            const track = capture.getVideoTracks()[0]
+            if (!track || track.readyState !== 'live') throw new Error('Screen capture ended.')
+            screenStreamRef.current = capture
+            await replaceVideoTrack(screenMediaRef.current, peerConnectionsRef.current, track, 'screenSender')
+            track.onended = () => { void stopScreenSharing() }
+            if (track.readyState !== 'live' || !mountedRef.current) throw new Error('Screen capture ended.')
+            setLocalScreen(capture)
+            setScreenSharing(true)
+            sendCameraState(Boolean(streamRef.current?.getVideoTracks()[0]), true)
+        } catch (err) {
+            if (mountedRef.current) setApproval(null)
+            capture?.getTracks().forEach(track => track.stop())
+            screenStreamRef.current = null
+            if (capture) {
+                await replaceVideoTrack(screenMediaRef.current, peerConnectionsRef.current, null, 'screenSender').catch(() => {})
+                void screenCommand('screen:stop').catch(() => {})
             }
-        } catch {
-            cameraStream?.getTracks().forEach(track => track.stop())
-            if (mountedRef.current) {
-                setError('Screen sharing stopped, but the camera could not be restored. Try turning it on or reconnecting.')
-            }
+            if (mountedRef.current && err.name !== 'NotAllowedError') setError(err.message || 'Unable to share screen.')
         } finally {
             screenStartingRef.current = false
             if (mountedRef.current) setScreenStarting(false)
         }
     }
 
-    async function startScreenSharing() {
-        const previousStream = streamRef.current
-        const stream = previousStream || new MediaStream()
-        if (startingRef.current || screenStartingRef.current || cameraStartingRef.current || screenStreamRef.current) return
-        if (!navigator.mediaDevices?.getDisplayMedia) {
-            setError('Screen sharing is not supported in this browser. You can still view other participants’ screens.')
-            return
+    const gallery = galleryMembers({ members, peers: socket ? peers : [], localUserId, cameraEnabled, screenSharing })
+    const screens = [
+        ...(screenSharing ? [{ id: 'screen-local', stream: localScreen, name: 'Your screen' }] : []),
+        ...remoteStreams.filter(item => peers.some(peer => peer.socketId === item.socketId && peer.screenSharing)).map(item => ({
+            id: 'screen-' + item.socketId, stream: item.screenStream,
+            name: (gallery.find(member => member.socketId === item.socketId)?.name || 'Participant') + ' screen'
+        }))
+    ]
+    const fullWindow = screens.some(screen => screen.id === fullWindowScreen) && maximizedScreen === fullWindowScreen
+    useEffect(() => {
+        if (!fullWindow) return
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+        const escape = event => { if (event.key === 'Escape') setFullWindowScreen(null) }
+        window.addEventListener('keydown', escape)
+        return () => {
+            document.body.style.overflow = previousOverflow
+            window.removeEventListener('keydown', escape)
         }
-
-        screenStartingRef.current = true
-        setScreenStarting(true)
-        setError('')
-        let capture
-        let installed = false
-        const previousTrack = stream.getVideoTracks()[0]
-        cameraBeforeSharingRef.current = previousTrack?.readyState === 'live'
-
-        try {
-            // Called directly from the click handler, before any other await.
-            capture = await navigator.mediaDevices.getDisplayMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15, max: 30 } },
-                audio: false
-            })
-            if (!mountedRef.current || streamRef.current !== previousStream) {
-                capture.getTracks().forEach(track => track.stop())
-                return
-            }
-            const track = capture.getVideoTracks()[0]
-            if (!track || track.readyState !== 'live') throw new Error('Screen capture ended')
-            streamRef.current = stream
-            track.contentHint = 'detail'
-            screenStreamRef.current = capture
-            track.onended = () => { void stopScreenSharing() }
-
-            await replaceVideoTrack(stream, peerConnectionsRef.current, track)
-            installed = true
-            previousTrack?.stop()
-            if (!mountedRef.current || streamRef.current !== stream) {
-                capture.getTracks().forEach(item => item.stop())
-                return
-            }
-
-            if (videoRef.current) videoRef.current.srcObject = stream
-            setCameraEnabled(false)
-            setScreenSharing(true)
-            setMediaReady(true)
-            // The initial webrtc:ready announces screen-only calls after setup.
-            if (previousStream) sendCameraState(false, true)
-        } catch (err) {
-            capture?.getTracks().forEach(track => {
-                track.onended = null
-                track.stop()
-            })
-            screenStreamRef.current = null
-            if (!previousStream && streamRef.current === stream) streamRef.current = null
-            if (mountedRef.current && err.name !== 'NotAllowedError') {
-                setError('Unable to share this screen. Your previous video source has been kept. Try again.')
-            }
-        } finally {
-            screenStartingRef.current = false
-            if (mountedRef.current) {
-                setScreenStarting(false)
-                // The browser's Stop button may have been pressed during replaceTrack.
-                if (installed && capture?.getVideoTracks()[0]?.readyState === 'ended') {
-                    void stopScreenSharing()
-                }
-            }
-        }
+    }, [fullWindow])
+    const focused = screens.some(screen => screen.id === maximizedScreen) ? maximizedScreen : null
+    const tiles = focused ? gallery : [...screens, ...gallery]
+    const pageSize = focused ? 3 : smallScreen ? 4 : 9
+    const pageCount = Math.max(1, Math.ceil(tiles.length / pageSize))
+    const currentPage = Math.min(galleryPage, pageCount - 1)
+    const visible = tiles.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
+    const columns = focused ? 2 : visible.length <= 1 ? 1 : visible.length <= 4 || smallScreen ? 2 : 3
+    const rows = focused ? 3 : Math.ceil(visible.length / columns)
+    const tileStyle = id => {
+        if (focused && id === focused) return { gridColumn: 1, gridRow: '1 / span 3' }
+        const index = visible.findIndex(item => item.id === id)
+        return { display: index < 0 ? 'none' : undefined, order: index,
+            ...(focused && index >= 0 ? { gridColumn: 2, gridRow: index + 1 } : {}) }
     }
+    const localId = localUserId || 'local'
+    const needsReconnect = /failed|interrupted|unable/i.test(callStatus)
+    const screenLabel = requestSending ? 'Sending request...' : approval?.pending ? 'Waiting for host approval' : screenStarting ? 'Switching video...' : screenSharing ? 'Stop sharing' : isHost || (approval?.hostId === hostId && approval?.expiresAt) ? 'Share screen' : 'Request screen share'
+    const micLabel = micStarting ? 'Starting microphone...' : micEnabled ? 'Mute microphone' : 'Enable microphone'
+    const cameraLabel = cameraStarting ? 'Starting camera...' : cameraEnabled ? 'Turn camera off' : 'Turn camera on'
 
     return (
-        <section>
-            <h2>Camera, microphone and screen</h2>
+        <section className="panel !p-5 sm:!p-6">
+            <div className="mb-2 flex items-center justify-between gap-3"><h2>Camera, microphone and screen</h2></div>
 
             {(
-                <p role="status">
+                <p role="status" className="text-xs text-muted">
                     {socket
                         ? `${callStatus} — Other call participants: ${peers.length}`
                         : 'Waiting for room connection...'}
                 </p>
             )}
             {screenSharing && <p role="status">You are sharing your screen. Microphone controls still apply.</p>}
-            <video ref={videoRef} autoPlay muted playsInline style={{
-                transform: screenSharing ? 'none' : 'scaleX(-1)',
-                display: mediaReady && (cameraEnabled || screenSharing) ? 'block' : 'none',
-                maxWidth: '100%'
-            }} />
-            {mediaReady && !cameraEnabled && !screenSharing && <p>Camera off</p>}
-
-            {socket && remoteStreams.map(participant => (
-                <RemoteVideo
-                    key={participant.socketId}
-                    stream={participant.stream}
-                    cameraEnabled={
-                        peers.find(peer => peer.socketId === participant.socketId)
-                            ?.cameraEnabled === true
-                    }
-                    screenSharing={
-                        peers.find(peer => peer.socketId === participant.socketId)
-                            ?.screenSharing === true
-                    }
-                />
-            ))}
-
-            <button
-                type="button"
-                onClick={handleEnableMedia}
-                disabled={starting || mediaReady || screenStarting}
-            >
-                {starting ? 'Starting...' : mediaReady ? 'Media enabled' : 'Enable camera/mic'}
-            </button>
-
-            <button
-                type="button"
-                onClick={screenSharing ? stopScreenSharing : startScreenSharing}
-                disabled={starting || screenStarting || cameraStarting}
-            >
-                {screenStarting ? 'Switching video...' : screenSharing ? 'Stop sharing' : 'Share screen'}
-            </button>
-
-            {mediaReady && (
-                <div>
-                    <button
-                        type="button"
-                        disabled={!socket?.connected}
-                        onClick={() => setCallAttempt(previous => previous + 1)}
-                    >
-                        Reconnect call
+            {isHost && requests.length > 0 && <div className="screen-request-overlay">
+                <section className="panel screen-request-dialog" role="dialog" aria-modal="true" aria-labelledby="screen-request-title">
+                    <h2 id="screen-request-title">Screen sharing request</h2>
+                    {requests.map(request => <div key={request.requestId}>
+                        <p>{members.find(member => member.user?._id === request.userId)?.user?.username || 'A participant'} wants to share their screen.</p>
+                        <div className="flex gap-3">
+                            <button type="button" onClick={() => decideScreen(request.requestId, true)}>Allow</button>
+                            <button type="button" onClick={() => decideScreen(request.requestId, false)}>Decline</button>
+                        </div>
+                    </div>)}
+                </section>
+            </div>}
+            {approval?.pending && <p role="status">Request sent. Waiting for the host to allow screen sharing.</p>}
+            {!screenSharing && approval?.hostId === hostId && <p role="status">Host approved. Click Share screen to choose what to share.</p>}
+            <div className="gallery-shell">
+            <div className={'media-grid paginated-gallery' + (focused ? ' presentation-gallery' : '')} style={{ gridTemplateColumns: focused ? 'minmax(0, 1fr) minmax(160px, 24%)' : 'repeat(' + columns + ', minmax(0, 1fr))', gridTemplateRows: 'repeat(' + rows + ', minmax(0, 1fr))' }}>
+                {screens.map(screen => <div className={'screen-share-tile' + (fullWindow && screen.id === fullWindowScreen ? ' screen-share-full-window' : '')} key={screen.id} style={tileStyle(screen.id)}>
+                    <RemoteVideo stream={screen.stream} screenSharing name={screen.name} />
+                    <button type="button" className="screen-size-button" title={focused === screen.id ? 'Restore gallery' : 'Maximize shared screen'}
+                        aria-label={focused === screen.id ? 'Restore gallery' : 'Maximize shared screen'}
+                        onClick={() => { setFullWindowScreen(null); setMaximizedScreen(focused === screen.id ? null : screen.id); setGalleryPage(0) }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d={focused === screen.id
+                                ? 'M3 9h6V3m6 0v6h6M3 15h6v6m6 0v-6h6'
+                                : 'M9 3H3v6m12-6h6v6M3 15v6h6m6 0h6v-6'} />
+                        </svg>
+                        <span className="sr-only">{focused === screen.id ? 'Restore' : 'Maximize'}</span>
                     </button>
-                    <button type="button" onClick={handleToggleMic} disabled={micStarting}>
-                        {micStarting ? 'Starting microphone...' : micEnabled ? 'Mute microphone' : 'Enable microphone'}
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={handleToggleCamera}
-                        disabled={cameraStarting || screenSharing || screenStarting}
-                    >
-                        {cameraStarting
-                            ? 'Starting camera...'
-                            : cameraEnabled
-                                ? 'Turn camera off'
-                                : 'Turn camera on'}
-                    </button>
-
-
+                    {focused === screen.id && <button type="button" className="screen-size-button screen-window-button"
+                        title={fullWindow ? 'Exit full-window view (Esc)' : 'Fill website window'}
+                        aria-label={fullWindow ? 'Exit full-window view' : 'Fill website window'}
+                        onClick={() => setFullWindowScreen(fullWindow ? null : screen.id)}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            {fullWindow ? <path d="M8 3v5H3m18 0h-5V3M3 16h5v5m8 0v-5h5" /> : <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 8h8v8m0-8-8 8" /></>}
+                        </svg>
+                    </button>}
+                </div>)}
+                <div className="video-tile" style={tileStyle(localId)}>
+                    <video ref={videoRef} autoPlay muted playsInline style={{
+                        transform: 'scaleX(-1)',
+                        display: cameraEnabled ? 'block' : 'none',
+                        maxWidth: '100%'
+                    }} />
+                    {(!cameraEnabled) && <ParticipantAvatar name="You" />}
+                    <span className="video-label">You</span>
                 </div>
-            )}
+                {socket && remoteStreams.map(participant => {
+                    const member = gallery.find(item => item.socketId === participant.socketId)
+                    return <RemoteVideo key={participant.socketId} stream={participant.stream}
+                        name={member?.name || 'Participant'}
+                        tileStyle={member ? tileStyle(member.id) : { display: 'none' }}
+                        cameraEnabled={member?.cameraEnabled === true}
+                        screenSharing={false} />
+                })}
+                {gallery.filter(member => !member.local && !remoteStreams.some(stream => socket && stream.socketId === member.socketId)).map(member => (
+                    <div key={member.id} className="video-tile" style={tileStyle(member.id)}>
+                        <ParticipantAvatar name={member.name} status={member.cameraEnabled || member.screenSharing ? 'Connecting video...' : 'Camera off'} />
+                        <span className="video-label">{member.name}</span>
+                    </div>
+                ))}
+            </div>
+            {pageCount > 1 && <nav className="gallery-pages" aria-label="Participant pages">
+                <button className="btn" type="button" aria-label="Previous participants" disabled={currentPage === 0} onClick={() => setGalleryPage(currentPage - 1)}>Prev</button>
+                <span role="status">{currentPage + 1} / {pageCount}</span>
+                <button className="btn" type="button" aria-label="Next participants" disabled={currentPage === pageCount - 1} onClick={() => setGalleryPage(currentPage + 1)}>Next</button>
+            </nav>}
+            </div>
+            <p className="mb-3 text-xs text-muted">{gallery.length} participants / Cameras on first{pageCount > 1 ? ' / Audio continues across all pages' : ''}</p>
 
+            <div className="call-controls">
+                <MediaControl icon="screen" label={screenLabel} active={screenSharing}
+                    disabled={!socket?.connected || screenStarting || requestSending || Boolean(approval?.pending)}
+                    onClick={() => { void (screenSharing ? stopScreenSharing() : startScreenSharing()) }} />
+                <MediaControl icon="mic" label={micLabel} active={micEnabled}
+                    disabled={!socket?.connected || micStarting} onClick={handleToggleMic} />
+                <MediaControl icon="camera" label={cameraLabel} active={cameraEnabled}
+                    disabled={!socket?.connected || cameraStarting} onClick={handleToggleCamera} />
+                {needsReconnect && <button type="button" disabled={!socket?.connected}
+                    onClick={() => setCallAttempt(previous => previous + 1)}>
+                    Reconnect call
+                </button>}
+            </div>
             {error && <p role="alert">{error}</p>}
         </section>
     )
