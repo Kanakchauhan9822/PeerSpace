@@ -37,18 +37,20 @@ export default function JoinRoom({ onRoomJoined }) {
     }
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form className="room-form panel" onSubmit={handleSubmit}>
+            <h2 className="mb-2">Join your study mates</h2>
+            <p className="!mt-0 mb-6 text-sm text-muted">Have an invitation? Enter the room ID.</p>
             <label htmlFor="join-room-id">Room ID</label>
             <input
                 id="join-room-id"
                 name="roomId"
-                type="text"
+                type="text" placeholder="Paste a room ID"
                 value={roomId}
                 onChange={(event) => setRoomId(event.target.value)}
                 required
             />
 
-            <button type="submit" disabled={loading}>
+            <button className="btn " type="submit" disabled={loading}>
                 {loading ? 'Joining...' : 'Join Room'}
             </button>
 

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { listMessages, sendMessage } from '../services/chat.api'
-import './RoomChat.css'
+
 
 function mergeMessages(previous, incoming) {
     const byId = new Map(previous.map(message => [message._id, message]))
@@ -144,42 +144,42 @@ export default function RoomChat({ roomId, socket, userId }) {
     }
 
     return (
-        <section className="room-chat" aria-labelledby="room-chat-title">
-            <h2 id="room-chat-title">Room chat</h2>
-            {!socket?.connected && <p role="status">Chat is reconnecting. Your draft is kept.</p>}
+        <section className="room-chat panel !p-5" aria-labelledby="room-chat-title">
+            <h2 id="room-chat-title" className="mb-4 text-xl">Room chat</h2>
+            {!socket?.connected && <p role="status" className="text-xs text-muted">Chat is reconnecting. Your draft is kept.</p>}
             {loading && <p role="status">Loading messages...</p>}
-            {historyError && <p role="alert">{historyError} <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry history</button></p>}
+            {historyError && <p role="alert">{historyError} <button className="btn" type="button" onClick={() => setRefresh(value => value + 1)}>Retry history</button></p>}
             {nextCursor && !accessDenied && (
                 <button type="button" onClick={loadOlder} disabled={loading || loadingOlder}>
                     {loadingOlder ? 'Loading older messages...' : 'Load older messages'}
                 </button>
             )}
-            <ol className="room-chat-messages" role="log" aria-label="Messages" aria-live="polite" ref={viewport}
+            <ol className="room-chat-messages my-4 max-h-80 min-h-24 space-y-3 overflow-y-auto pr-1 text-sm" role="log" aria-label="Messages" aria-live="polite" ref={viewport}
                 onScroll={() => {
                     const element = viewport.current
                     followLatest.current = element.scrollHeight - element.scrollTop - element.clientHeight < 60
                 }}>
                 {messages.map(message => (
-                    <li key={message._id} className={message.sender._id === userId ? 'room-chat-own' : ''}>
-                        <div className="room-chat-meta">
+                    <li key={message._id} className={message.sender._id === userId ? 'room-chat-own rounded-xl border border-[#51565a] bg-[#292c2e] p-3' : 'rounded-xl border border-line bg-canvas p-3'}>
+                        <div className="room-chat-meta mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                             <strong>{message.sender.username}{message.sender._id === userId ? ' (you)' : ''}</strong>
                             <time dateTime={message.createdAt} title={new Date(message.createdAt).toLocaleString()}>
                                 {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </time>
                         </div>
-                        <p>{message.text}</p>
+                        <p className="whitespace-pre-wrap break-words">{message.text}</p>
                     </li>
                 ))}
             </ol>
             {!loading && !historyError && messages.length === 0 && <p>No messages yet. Start the conversation.</p>}
             <form onSubmit={submit}>
                 <label htmlFor="room-chat-draft">Message</label>
-                <textarea id="room-chat-draft" value={draft} maxLength={2000} rows={3}
+                <textarea className="text-sm" id="room-chat-draft" value={draft} maxLength={2000} rows={3}
                     disabled={sending || accessDenied} onChange={event => setDraft(event.target.value)}
                     placeholder="Write to your room..." aria-describedby="room-chat-count" />
-                <div className="room-chat-actions">
+                <div className="room-chat-actions mt-3 flex items-center justify-between gap-3">
                     <small id="room-chat-count">{draft.length}/2000</small>
-                    <button type="submit" disabled={!draft.trim() || sending || accessDenied || !socket?.connected}>
+                    <button className="btn btn-primary" type="submit" disabled={!draft.trim() || sending || accessDenied || !socket?.connected}>
                         {sending ? 'Sending...' : 'Send'}
                     </button>
                 </div>

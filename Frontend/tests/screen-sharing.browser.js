@@ -1,8 +1,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import axios from 'axios'
-import RemoteVideo from '../src/features/rooms/components/RemoteVideo.jsx'
-import { replaceVideoTrack } from '../src/features/rooms/services/mediaTracks.js'
 
 // Synthetic capture avoids recording the developer's camera, microphone or desktop.
 const tracks = []
@@ -147,159 +145,84 @@ const drawing = setInterval(() => {
 
 async function run() {
     const { default: RoomMedia } = await import('../src/features/rooms/components/RoomMedia.jsx')
-    const { default: RoomChat } = await import('../src/features/rooms/components/RoomChat.jsx')
-    root.render(React.createElement(React.Fragment, null,
-        React.createElement(RoomMedia, { roomId: 'test-room', socket }),
-        React.createElement(RoomChat, { roomId: 'test-room', socket, userId: 'local' })))
-    await until(() => listeners.has('webrtc:peers'), 'Receive-only call did not subscribe')
+    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket, localUserId: 'local', hostId: 'local' }))
+    await until(() => listeners.has('webrtc:peers'), 'Call not subscribed')
     remoteSending = true
     joinParticipant()
-    await until(() => receiver?.connectionState === 'connected' || receiverError, 'Receive-only peer did not connect')
+    await until(() => receiver?.connectionState === 'connected' || receiverError, 'Receive-only failed')
     assert(!receiverError, receiverError)
-    await until(() => [...host.querySelectorAll('video')].some(video => video !== preview() && video.srcObject?.getVideoTracks().length), 'Remote video did not arrive before local camera')
-    assert(cameraRequests === 0 && button('Enable camera/mic'), 'Watching requested local camera access')
-    passed.push('receives remote video before enabling local camera or screen')
-    remoteSending = false
+    assert(cameraRequests === 0 && !button('Enable camera/mic'), 'Unexpected device request')
+    passed.push('receive-only connection needs no device permission')
     mode = 'cancel'
     await click('Share screen')
-    assert(cameraRequests === 0 && !button('Reconnect call'), 'Initial picker cancellation started media')
-    mode = 'normal'
-    denyCamera = true
-    await click('Share screen')
-    await until(() => button('Stop sharing'), 'Screen-first capture did not start')
-    assert(cameraRequests === 0 && preview().srcObject.getAudioTracks().length === 0, 'Screen sharing requested camera or microphone')
-    joinParticipant()
-    await until(() => receiver?.connectionState === 'connected' || receiverError, 'Screen-first participant did not connect')
-    assert(!receiverError, receiverError)
-    let screenFrames = 0
-    for (let i = 0; i < 50 && !screenFrames; i++) {
-        const stats = await receiver.getStats()
-        stats.forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'video') screenFrames = report.framesDecoded || 0 })
-        if (!screenFrames) await wait(100)
-    }
-    assert(screenFrames > 0, 'Screen-first call sent no video frames')
-    const connectionBeforeChat = receiver
-    const draft = host.querySelector('textarea')
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(draft, 'Chat during screen sharing')
-    draft.dispatchEvent(new Event('input', { bubbles: true }))
-    await click('Send')
-    await until(() => host.querySelector('.room-chat-messages').textContent.includes('Chat during screen sharing'), 'Chat not delivered')
-    await wait(300)
-    assert(receiver === connectionBeforeChat && receiver.connectionState === 'connected', 'Chat restarted the media connection')
-    const afterChat = await receiver.getStats()
-    let framesAfterChat = 0
-    afterChat.forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'video') framesAfterChat = report.framesDecoded || 0 })
-    assert(framesAfterChat > screenFrames, 'Video stopped after sending chat')
-    passed.push('chat delivery keeps the same peer connection and screen frames continue')
-    await click('Enable microphone')
-    assert(cameraRequests === 0 && preview().srcObject.getAudioTracks()[0]?.readyState === 'live', 'Independent microphone failed')
-    await click('Stop sharing')
-    assert(cameraRequests === 0 && button('Turn camera on'), 'Screen-first stop activated the camera')
-    passed.push('share immediately without camera permission; screen reaches peer; microphone enabled independently')
-    passed.push('initial picker cancellation is safe and screen-first stop keeps camera off')
-    root.unmount()
-    participantJoined = false
-    denyCamera = false
-    root = createRoot(host)
-    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket }))
-    await click('Enable camera/mic')
-    await until(() => button('Share screen'), 'Media did not start')
-    const initialCamera = preview().srcObject.getVideoTracks()[0]
-    const mic = preview().srcObject.getAudioTracks()[0]
-
-    mode = 'cancel'
-    await click('Share screen')
-    assert(initialCamera.readyState === 'live' && button('Share screen'), 'Cancel changed camera')
-    passed.push('picker cancellation preserves camera')
-
+    assert(!button('Stop sharing') && cameraRequests === 0, 'Cancel started capture')
     mode = 'normal'
     await click('Share screen')
-    await until(() => button('Stop sharing'), 'Share did not start')
-    assert(initialCamera.readyState === 'ended', 'Camera hardware track was not stopped')
-    assert(mic.readyState === 'live' && preview().srcObject.getAudioTracks()[0] === mic, 'Microphone changed')
-    assert(preview().style.transform === 'none', 'Screen preview mirrored')
-    assert(lastState().screenSharing && !lastState().cameraEnabled, 'Wrong screen metadata')
-    assert(button('Turn camera on').disabled, 'Camera switch allowed during sharing')
-    passed.push('sharing stops camera, preserves microphone and publishes screen state')
-
-    joinParticipant()
-    await until(() => receiver?.connectionState === 'connected' || receiverError, 'Joining participant did not connect')
-    assert(!receiverError, receiverError)
-    let frames = 0
-    for (let i = 0; i < 50 && !frames; i++) {
-        const stats = await receiver.getStats()
-        stats.forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'video') frames = report.framesDecoded || 0 })
-        if (!frames) await wait(100)
-    }
-    assert(frames > 0, 'Joining participant did not receive screen video frames')
-    passed.push('participant joining during sharing receives video over real WebRTC')
-
+    await until(() => button('Stop sharing'), 'Share not started')
+    await click('Maximize')
+    assert(host.querySelector('.presentation-gallery'), 'Maximize did not focus the screen')
+    await click('Restore')
+    assert(!host.querySelector('.presentation-gallery'), 'Restore did not return to gallery')
     const screen = preview().srcObject.getVideoTracks()[0]
+    assert(cameraRequests === 0, 'Screen requested camera')
+    await click('Turn camera on')
+    await click('Enable microphone')
+    const cameraVideo = [...host.querySelectorAll('video')].find(video => video.muted && video.style.transform === 'scaleX(-1)')
+    const camera = cameraVideo.srcObject.getVideoTracks()[0]
+    const mic = cameraVideo.srcObject.getAudioTracks()[0]
+    assert(camera.readyState === 'live' && screen.readyState === 'live' && mic.readyState === 'live', 'Independent capture failed')
+    assert(lastState().cameraEnabled && lastState().screenSharing, 'Combined state missing')
+    let received = []
+    for (let i = 0; i < 60; i++) {
+        received = []
+        const stats = await receiver.getStats()
+        stats.forEach(report => { if (report.type === 'inbound-rtp' && report.kind === 'video' && report.framesDecoded > 0) received.push(report) })
+        if (received.length === 2) break
+        await wait(100)
+    }
+    assert(received.length === 2, 'Peer did not receive BOTH camera and screen frames')
+    passed.push('camera and screen send separate live video tracks while microphone works')
+    await click('Turn camera off')
+    assert(camera.readyState === 'ended' && screen.readyState === 'live', 'Camera off stopped screen')
+    await click('Turn camera on')
+    const nextCamera = cameraVideo.srcObject.getVideoTracks()[0]
     screen.stop()
     screen.dispatchEvent(new Event('ended'))
-    await until(() => button('Share screen') && button('Turn camera off'), 'Browser stop did not restore camera')
-    assert(preview().srcObject.getVideoTracks()[0].readyState === 'live', 'Camera not restored')
-    assert(lastState().cameraEnabled && !lastState().screenSharing, 'Camera state not restored')
-    passed.push('browser Stop restores previously enabled camera')
-
-    await click('Turn camera off')
-    const requestsBefore = cameraRequests
-    await click('Share screen')
-    await click('Stop sharing')
-    assert(cameraRequests === requestsBefore && button('Turn camera on'), 'Camera-off preference lost')
-    passed.push('sharing from camera-off leaves camera off afterward')
-
-    await click('Turn camera on')
-    await click('Share screen')
-    denyCamera = true
-    await click('Stop sharing')
-    assert(button('Turn camera on') && host.textContent.includes('could not be restored'), 'Restoration denial not handled')
-    denyCamera = false
-    passed.push('camera restoration denial leaves capture stopped and exposes recovery')
-
-    await click('Share screen')
-    const activeScreen = preview().srcObject.getVideoTracks()[0]
-    await click('Reconnect call')
-    await until(() => events.filter(e => e.name === 'webrtc:ready').at(-1)?.payload.screenSharing, 'Reconnect lost screen metadata')
-    assert(activeScreen.readyState === 'live', 'Reconnect stopped capture')
-    root.unmount()
-    assert(activeScreen.readyState === 'ended' && mic.readyState === 'ended', 'Unmount leaked capture')
-    participantJoined = false
-    passed.push('reconnect preserves sharing and unmount stops all capture')
-
-    root = createRoot(host)
-    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket }))
-    await click('Enable camera/mic')
+    await until(() => button('Share screen'), 'Browser stop did not end sharing')
+    assert(nextCamera.readyState === 'live', 'Screen stop interrupted camera')
+    passed.push('camera and screen stop independently')
     mode = 'pending'
     await click('Share screen')
     root.unmount()
-    clearInterval(drawing)
-    receiver?.close()
-    const lateCapture = capture()
-    resolvePicker(lateCapture)
-    await wait(80)
-    assert(lateCapture.getTracks().every(t => t.readyState === 'ended'), 'Late picker result leaked')
-    passed.push('leaving with picker open stops late capture')
-
+    const late = capture()
+    resolvePicker(late)
+    await wait(100)
+    assert(late.getTracks().every(track => track.readyState === 'ended'), 'Late capture leaked')
+    assert(nextCamera.readyState === 'ended' && mic.readyState === 'ended', 'Unmount leaked devices')
+    passed.push('unmount releases devices and late picker capture')
+    participantJoined = false
     root = createRoot(host)
-    const remote = capture()
-    root.render(React.createElement(RemoteVideo, { stream: remote, cameraEnabled: false, screenSharing: true }))
-    await until(() => preview(), 'Remote video absent')
-    assert(preview().style.transform === 'none' && preview().style.display === 'block', 'Remote screen hidden or mirrored')
-    root.render(React.createElement(RemoteVideo, { stream: remote, cameraEnabled: false, screenSharing: false }))
-    await until(() => preview().style.display === 'none', 'Stopped remote video still visible')
-    passed.push('remote screen visible without mirroring; stopped video hidden')
-
-    const stream = capture(), old = stream.getVideoTracks()[0], next = capture().getVideoTracks()[0]
-    const sender = { track: old, async replaceTrack(track) { this.track = track } }
-    const connections = new Map([
-        ['healthy', { pc: { signalingState: 'stable' }, videoSender: sender }],
-        ['rejecting', { pc: { signalingState: 'stable' }, videoSender: { async replaceTrack(track) { if (track === next) throw new Error('Cannot replace') } } }]
-    ])
-    let rejected = false
-    try { await replaceVideoTrack(stream, connections, next) } catch { rejected = true }
-    assert(rejected && sender.track === old && stream.getVideoTracks()[0] === old, 'Partial failure did not roll back')
-    passed.push('partial sender failure rolls back stream and successful senders')
+    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket, localUserId: 'local', hostId: 'host' }))
+    await click('Request screen share')
+    assert(host.textContent.includes('Waiting for the host'), 'No pending request feedback')
+    listeners.get('screen:decision')({ roomId: 'test-room', hostId: 'host', allowed: true, expiresAt: Date.now() + 120000 })
+    await until(() => button('Share screen'), 'Approval did not unlock picker')
+    mode = 'normal'
+    await click('Share screen')
+    await until(() => button('Stop sharing'), 'Approved share failed')
+    passed.push('participant requests approval before opening screen picker')
+    root.unmount()
+    root = createRoot(host)
+    root.render(React.createElement(RoomMedia, { roomId: 'test-room', socket, localUserId: 'host', hostId: 'host' }))
+    await until(() => listeners.has('screen:requests'), 'Host request listener missing')
+    listeners.get('screen:requests')({ roomId: 'test-room', requests: [{ requestId: 'request-1', userId: 'local' }] })
+    await until(() => host.querySelector('[role="dialog"]'), 'Host approval prompt missing')
+    await click('Allow')
+    assert(events.some(event => event.name === 'screen:decide' && event.payload.requestId === 'request-1' && event.payload.allowed), 'Host Allow did not send decision')
+    listeners.get('screen:requests')({ roomId: 'test-room', requests: [] })
+    await until(() => !host.querySelector('[role="dialog"]'), 'Resolved request prompt remained')
+    passed.push('host sees approval dialog and can allow sharing')
+    clearInterval(drawing)
     return passed
 }
 

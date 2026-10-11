@@ -1,3 +1,4 @@
+import PageShell from '../../../components/PageShell'
 import { useEffect, useState } from 'react'
 import { listRooms } from '../services/room.api'
 import CreateRooms from '../components/CreateRooms'
@@ -42,8 +43,14 @@ export default function Home() {
     }, [])
 
     return (
-        <main>
-            <h1>PeerSpace</h1>
+        <PageShell actions={<LogoutButton />}>
+        <main id="main-content" className="page-wrap py-10">
+            <div className="mb-10 border-b border-line pb-9">
+                <p className="eyebrow mb-4">Your study space</p>
+                <h1 className="mb-4 text-4xl font-light sm:text-5xl">Good company. Better focus.</h1>
+                <p className="max-w-xl text-muted">Pick up where you left off, or open a fresh room. A little progress starts with showing up.</p>
+            </div>
+            <div className="grid gap-5 md:grid-cols-2">
 
             <CreateRooms
             onRoomCreated={(room) => {
@@ -63,27 +70,29 @@ export default function Home() {
     }}
 />
 
-            <h2>Your rooms</h2>
+            </div>
+            <div className="mt-12 mb-6 flex items-center justify-between"><h2>Your rooms</h2><span className="badge">{rooms.length} {rooms.length === 1 ? 'room' : 'rooms'}</span></div>
 
             {loading ? (
-                <p>Loading rooms...</p>
+                <p role="status" className="panel text-muted">Loading your study rooms...</p>
             ) : error ? (
                 <p role="alert">{error}</p>
             ) : rooms.length === 0 ? (
-                <p>You haven’t joined any rooms yet.</p>
+                <div className="panel py-12 text-center"><h3 className="mb-2">Your table is waiting</h3><p className="text-muted">Create your first room above, or join a friend using their room ID.</p></div>
             ) : (
-                <ul>
+                <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {rooms.map((room) => (
-                       <li key={room._id}>
-                            <Link to={`/rooms/${room._id}`}>
-                                {room.name}
+                       <li key={room._id} className="min-w-0">
+                            <Link className="panel group block h-full transition-colors hover:border-[#65696c]" to={`/rooms/${room._id}`}>
+                                <span className="eyebrow">Study room</span><h3 className="mt-4 mb-6 break-words">{room.name}</h3><span className="flex items-center justify-between text-sm text-muted"><span>{room.members?.length ?? 1} members</span><span className="text-ink">Open room ↗</span></span>
                             </Link>
                         </li>
                     ))}
                 </ul>
             )}
 
-            <LogoutButton />
+
         </main>
+        </PageShell>
     );
 }

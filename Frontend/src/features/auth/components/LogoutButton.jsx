@@ -30,6 +30,7 @@ export default function LogoutButton() {
     return (
         <>
             <button
+                className="btn"
                 type="button"
                 onClick={handleLogout}
                 disabled={loading}

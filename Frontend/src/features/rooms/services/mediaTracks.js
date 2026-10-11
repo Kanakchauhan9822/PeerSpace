@@ -1,15 +1,15 @@
 // Keep the shared stream authoritative so participants joining during a switch
 // receive the same video source as existing participants.
-export async function replaceVideoTrack(stream, connections, nextTrack) {
+export async function replaceVideoTrack(stream, connections, nextTrack, senderKey = 'videoSender') {
     const previous = stream.getVideoTracks()
     previous.forEach(track => stream.removeTrack(track))
     if (nextTrack) stream.addTrack(nextTrack)
 
     async function updateSenders(track) {
         return Promise.allSettled([...connections.values()].map(async entry => {
-            if (!entry.videoSender || entry.pc.signalingState === 'closed') return
+            if (!entry[senderKey] || entry.pc.signalingState === 'closed') return
             try {
-                await entry.videoSender.replaceTrack(track)
+                await entry[senderKey].replaceTrack(track)
             } catch (error) {
                 if (entry.pc.signalingState !== 'closed') throw error
             }

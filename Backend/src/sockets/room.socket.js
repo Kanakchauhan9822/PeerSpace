@@ -1,3 +1,4 @@
+const { registerScreenPermissions } = require('./screenPermissions')
 const mongoose = require('mongoose')
 const roomModel = require('../models/room.model')
 
@@ -83,6 +84,7 @@ function registerRoomEvents(io) {
         }
     }
     io.on('connection', (socket) => {
+        registerScreenPermissions(io, socket, broadcastMediaPeers)
         socket.on('webrtc:offer', async (payload, acknowledge) => {
             if (typeof acknowledge !== 'function') return
 
@@ -335,8 +337,7 @@ function registerRoomEvents(io) {
             if (typeof acknowledge !== 'function') return
 
             if (
-                (payload?.screenSharing != null && typeof payload.screenSharing !== 'boolean') ||
-                (payload?.cameraEnabled === true && payload?.screenSharing === true)
+                (payload?.screenSharing != null && typeof payload.screenSharing !== 'boolean')
             ) {
                 return acknowledge({ success: false, message: 'Invalid video state' })
             }
@@ -383,6 +384,7 @@ function registerRoomEvents(io) {
                     })
                 }
 
+                if (payload.screenSharing && socket.data.screenActive !== roomChannel) return acknowledge({ success: false, message: 'Screen sharing permission required' })
                 const previousRoom = socket.data.mediaRoom
                 socket.data.mediaRoom = roomChannel
                 socket.data.cameraEnabled = payload.cameraEnabled === true
@@ -466,8 +468,7 @@ function registerRoomEvents(io) {
                 typeof roomId !== 'string' ||
                 !mongoose.isObjectIdOrHexString(roomId) ||
                 typeof cameraEnabled !== 'boolean' ||
-                typeof screenSharing !== 'boolean' ||
-                (cameraEnabled && screenSharing)
+                typeof screenSharing !== 'boolean'
             ) {
                 return acknowledge({
                     success: false,
@@ -512,6 +513,7 @@ function registerRoomEvents(io) {
                 if (socket.data.mediaStateVersion !== stateVersion) {
                     return acknowledge({ success: true })
                 }
+                if (screenSharing && socket.data.screenActive !== roomChannel) return acknowledge({ success: false, message: 'Screen sharing permission required' })
                 socket.data.cameraEnabled = cameraEnabled
                 socket.data.screenSharing = screenSharing
                 broadcastMediaPeers(roomChannel)

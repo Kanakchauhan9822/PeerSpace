@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Manrope', sans-serif;
+  --font-serif: 'Literata', Georgia, serif;
+  --color-canvas: #161718;
+  --color-panel: #1c1d1f;
+  --color-raised: #1f2123;
+  --color-line: #303335;
+  --color-ink: #e8e9ea;
+  --color-muted: #a3a6a9;
+}
+
+@layer base {
+  html { scroll-behavior: smooth; color-scheme: dark; }
+  body { @apply m-0 bg-canvas font-sans text-ink antialiased; background-image: radial-gradient(#26282a 1px, transparent 1px); background-size: 28px 28px; line-height: 1.6; }
+  h1, h2, h3 { @apply font-serif; }
+  h1 { @apply text-4xl font-light leading-tight tracking-tight; }
+  h2 { @apply text-2xl font-medium leading-snug; }
+  h3 { @apply text-xl font-medium; }
+  button, input, textarea { font: inherit; }
+  button { @apply cursor-pointer; }
+  button:disabled { @apply cursor-not-allowed opacity-45; }
+  :focus-visible { outline: 2px solid #e8e9ea; outline-offset: 4px; }
+  input, textarea { @apply w-full rounded-[10px] border border-[#3a3d40] bg-canvas px-4 py-3 text-ink; }
+  input::placeholder, textarea::placeholder { color: #8a8d90; }
+  input:focus, textarea:focus { @apply border-ink; }
+  label { @apply mb-2 block text-sm font-medium text-[#b4b7b9]; }
+  [role=alert] { @apply my-3 rounded-lg border border-[#624547] bg-[#302325] px-4 py-3 text-sm text-[#f1b9ba]; }
+  [role=status]:empty { display: none; }
+  p, li { overflow-wrap: anywhere; }
+  ::selection { @apply bg-ink text-canvas; }
+}
+
+@layer components {
+  .page-wrap { @apply mx-auto w-full max-w-[1200px] px-5 sm:px-8; }
+  .panel { @apply rounded-2xl border border-line bg-panel p-6 sm:p-8; }
+  .btn { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-[#3a3d40] bg-[#26282a] px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-[#34373a]; }
+  .btn-primary { @apply border-ink bg-ink text-canvas hover:bg-white; }
+  .btn-danger { @apply border-[#624547] bg-transparent text-[#f1b9ba] hover:bg-[#302325]; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[.18em] text-muted; }
+  .badge { @apply inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-muted; }
+  .auth-card { @apply rounded-[18px] border border-line bg-raised px-6 py-8 shadow-[0_30px_80px_rgba(0,0,0,.45)] sm:px-9 sm:py-10; }
+  .auth-card form > input { @apply mb-5 h-12; }
+  .auth-card form > button { @apply mt-2 w-full; }
+  .auth-card form > p { @apply mt-5 text-center text-sm text-muted; }
+  .auth-card a { @apply font-semibold text-ink underline underline-offset-4; }
+  .room-form > input { @apply mb-5; }
+  .room-form > button { @apply w-full; }
+  .room-form > p { @apply mt-3 text-sm text-muted; }
+  .media-grid { @apply my-5 grid grid-cols-1 gap-3 sm:grid-cols-2; }
+  .video-tile { @apply relative min-w-0 overflow-hidden rounded-xl border border-[#34373a] bg-[#26282a]; }
+  .video-tile video { @apply aspect-video w-full object-contain; }
+  .video-placeholder { @apply flex aspect-video flex-col items-center justify-center gap-2 text-sm text-muted; }
+  .video-label { @apply absolute bottom-2 left-2 rounded-md bg-canvas/85 px-2 py-1 text-xs; }
+  .call-controls { @apply flex flex-wrap gap-2 border-t border-line pt-5; }
+  .call-controls > div { @apply flex flex-wrap gap-2; }
+  .call-controls button { @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-[#3a3d40] bg-[#26282a] px-3 py-2 text-xs font-semibold hover:bg-[#34373a]; }
+  .timer-panel { @apply rounded-2xl border border-line bg-panel p-6 text-center; }
+  .timer-panel h2 { @apply text-xl; }
+  .timer-panel > p:first-of-type { @apply my-5 font-serif text-6xl font-light tabular-nums tracking-tight; }
+  .timer-panel > p:nth-of-type(2) { @apply mb-4 text-xs uppercase tracking-widest text-muted; }
+  .timer-panel form { @apply flex flex-wrap justify-center gap-2; }
+  .timer-panel label { @apply w-full text-left; }
+  .timer-panel input { @apply mt-2; }
+  .timer-panel button { @apply min-h-11 rounded-lg border border-line px-4 py-2 text-sm; }
+  .timer-panel button[type=submit] { @apply bg-ink text-canvas; }
+  .timer-panel form p { @apply text-sm text-muted; }
+  .meeting-page .timer-panel { @apply mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl px-4 py-2 text-left; }
+  .meeting-page .timer-panel h2 { @apply text-sm; }
+  .meeting-page .timer-panel > p:first-of-type { @apply my-0 text-3xl; }
+  .meeting-page .timer-panel > p:nth-of-type(2) { @apply mb-0 mr-auto text-[10px]; }
+  .meeting-page .timer-panel form { @apply items-center; }
+  .meeting-page .timer-panel label { @apply mb-0 flex w-auto items-center gap-2 text-xs; }
+  .meeting-page .timer-panel input { @apply mt-0 w-20 px-2 py-1; }
+  .meeting-page .timer-panel button { @apply min-h-9 px-3 py-1 text-xs; }
+  .meeting-stage .media-grid { min-height: 62svh; grid-auto-rows: minmax(240px, 1fr); }
+  .meeting-stage .video-tile { @apply flex flex-col justify-center; }
+  .meeting-stage .video-tile:only-child { grid-column: 1 / -1; }
+  .meeting-stage .video-tile video { height: 100%; max-height: 72svh; aspect-ratio: auto; }
+  .meeting-stage .video-placeholder { @apply flex-1; aspect-ratio: auto; min-height: 240px; }
+  .gallery-shell { @apply relative; }
+  .gallery-shell:has(.gallery-pages) { padding-right: 68px; }
+  .media-grid.paginated-gallery { height: 64svh; min-height: 300px; grid-auto-rows: unset; }
+  .media-grid.paginated-gallery .video-tile { grid-column: auto; min-height: 0; }
+  .media-grid.paginated-gallery .video-tile video { height: 100%; width: 100%; min-height: 0; aspect-ratio: auto; object-fit: contain; }
+  .media-grid.paginated-gallery .video-placeholder { min-height: 0; height: 100%; gap: 6px; aspect-ratio: auto; }
+  .participant-avatar { @apply flex shrink-0 items-center justify-center rounded-full border border-[#51565a] bg-[#34373a] font-serif text-2xl text-ink; width: clamp(36px, 6vh, 76px); height: clamp(36px, 6vh, 76px); }
+  .gallery-pages { @apply absolute right-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-3 text-xs text-muted; }
+  .gallery-pages .btn { @apply min-h-11 px-2 text-xs; }
+  @media (max-width: 639px) {
+    .meeting-stage .media-grid { min-height: 55svh; }
+    .meeting-page .timer-panel form { @apply w-full justify-start; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; } }
+
+/* Tooltips also appear on keyboard focus, including unavailable controls. */
+.media-control { position: relative; display: inline-flex; }
+.call-controls .media-icon-button { width: 46px; height: 46px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.call-controls .media-icon-button[aria-pressed="true"] { background: #e8e5de; color: #202224; border-color: #e8e5de; }
+.media-control-tooltip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 180px; padding: 7px 10px; border-radius: 7px; background: #e8e5de; color: #202224; font-size: 12px; line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; visibility: hidden; z-index: 20; }
+.media-control:hover .media-control-tooltip, .media-control:focus-within .media-control-tooltip { opacity: 1; visibility: visible; }
+
+.screen-share-tile { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.screen-share-tile > .video-tile { height: 100%; }
+.screen-size-button { position: absolute; right: 10px; top: 10px; z-index: 2; background: #202224e6; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 8px; }
+.screen-request-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #0009; padding: 20px; }
+.screen-request-dialog { width: min(100%, 440px); max-height: 80vh; overflow: auto; }
+.screen-request-dialog p { margin: 16px 0; }
+@media (max-width: 639px) {
+  .media-grid.presentation-gallery { grid-template-columns: minmax(0, 1fr) minmax(90px, 28%) !important; }
+}
+
+.screen-window-button { right: 58px; }
+.screen-share-tile.screen-share-full-window { position: fixed; inset: 0; z-index: 90; width: 100vw; height: 100dvh; background: #17191b; }
+.screen-share-full-window > .video-tile { border: 0; border-radius: 0; }
+.meeting-stage .screen-share-full-window.video-tile video,
+.meeting-stage .screen-share-full-window .video-tile video { height: 100%; max-height: 100dvh; object-fit: contain; }

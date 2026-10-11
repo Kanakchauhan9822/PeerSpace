@@ -1,3 +1,4 @@
+import PageShell from '../../../components/PageShell'
 import { joinRoom, getRoom } from '../services/room.api'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
@@ -63,13 +64,13 @@ export default function JoinInvite() {
 
 
   return (
-    <main>
-      <h1>Room invitation</h1>
+    <PageShell><main id="main-content" className="page-wrap py-16"><div className="panel mx-auto max-w-lg text-center"><p className="eyebrow mb-4">A seat at the table</p>
+      <h1 className="mb-5">You are invited.</h1>
       <p>You have been invited to join a PeerSpace room.</p>
-      <p>Room ID: {roomId}</p>
+      <p className="my-6 rounded-lg border border-line bg-canvas p-3 text-sm text-muted">Room ID: {roomId}</p>
 
       <button
-        type="button"
+        className="btn btn-primary mb-6 w-full" type="button"
         onClick={handleJoin}
         disabled={joining}
       >
@@ -81,6 +82,6 @@ export default function JoinInvite() {
       <p>
         <Link to="/">Back to home</Link>
       </p>
-    </main>
+    </div></main></PageShell>
   )
 }

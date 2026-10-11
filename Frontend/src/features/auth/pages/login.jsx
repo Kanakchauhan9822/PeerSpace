@@ -1,3 +1,4 @@
+import AuthLayout from '../../../components/AuthLayout'
 import { login } from "../services/auth.api"
 import { useContext, useState } from 'react'
 import { AuthContext } from '../auth.context.jsx'
@@ -44,29 +45,30 @@ async function handleSubmit(e) {
 }
 
     return(
-        
+
+        <AuthLayout>
         <form onSubmit={
             handleSubmit}>
-            
+
             <label htmlFor="email">Email</label>
-            <input id="email" 
-            name="email" 
-            type="email" 
+            <input id="email"
+            name="email" autoComplete="email" placeholder="you@college.edu"
+            type="email"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
             required></input>
 
             <label htmlFor="password">Password</label>
-            <input id="password" 
-            name="password" 
-            type="password" 
+            <input id="password"
+            name="password"
+            type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e)=>setPassword(e.target.value)}
             required></input>
 
-            <button type="submit" disabled={loading}>
-                {loading ? 'Logging in...' : 'Login'}
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+                {loading ? 'Logging in...' : 'Log in'}
             </button>
 
             <p role="status">{message}</p>
@@ -77,5 +79,6 @@ async function handleSubmit(e) {
                 </Link>
             </p>
         </form>
+        </AuthLayout>
     )
 }
