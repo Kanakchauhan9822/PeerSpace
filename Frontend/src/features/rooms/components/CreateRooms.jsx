@@ -1,3 +1,4 @@
+import { enableRoomAudio } from '../services/roomAudio'
 import { useState } from 'react'
 import { createRoom } from '../services/room.api'
 
@@ -11,6 +12,7 @@ export default function CreateRooms({onRoomCreated}) {
 
         if (loading) return
 
+    enableRoomAudio()
         setLoading(true)
         setMessage('')
 

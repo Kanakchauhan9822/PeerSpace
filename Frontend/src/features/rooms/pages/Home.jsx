@@ -1,12 +1,14 @@
+import { enableRoomAudio } from '../services/roomAudio'
 import PageShell from '../../../components/PageShell'
 import { useEffect, useState } from 'react'
 import { listRooms } from '../services/room.api'
 import CreateRooms from '../components/CreateRooms'
 import LogoutButton from '../../auth/components/LogoutButton'
 import JoinRoom from '../components/JoinRoom'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 export default function Home() {
+    const navigate = useNavigate()
     const [rooms, setRooms] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -54,7 +56,7 @@ export default function Home() {
 
             <CreateRooms
             onRoomCreated={(room) => {
-            setRooms((previous) => [room, ...previous]);
+            navigate(`/rooms/${room._id}`)
     }}
 />
             <JoinRoom
@@ -83,7 +85,7 @@ export default function Home() {
                 <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {rooms.map((room) => (
                        <li key={room._id} className="min-w-0">
-                            <Link className="panel group block h-full transition-colors hover:border-[#65696c]" to={`/rooms/${room._id}`}>
+                            <Link onClick={enableRoomAudio} className="panel group block h-full transition-colors hover:border-[#65696c]" to={`/rooms/${room._id}`}>
                                 <span className="eyebrow">Study room</span><h3 className="mt-4 mb-6 break-words">{room.name}</h3><span className="flex items-center justify-between text-sm text-muted"><span>{room.members?.length ?? 1} members</span><span className="text-ink">Open room ↗</span></span>
                             </Link>
                         </li>

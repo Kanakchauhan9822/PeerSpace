@@ -1,3 +1,4 @@
+import { enableRoomAudio } from '../services/roomAudio'
 import { useState } from 'react';
 import { joinRoom } from '../services/room.api';
 
@@ -18,6 +19,7 @@ export default function JoinRoom({ onRoomJoined }) {
             return;
         }
 
+    enableRoomAudio()
         setLoading(true);
         setMessage('');
 
