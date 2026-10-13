@@ -3,18 +3,20 @@ const app=require('./src/app')
 const connectToDB=require('./src/config/database')
 const http = require('node:http')
 const { Server } = require('socket.io')
-const port=3000
+const port = process.env.PORT || 3000
 const cookieParser = require('cookie-parser')
 const { socketAuth } = require('./src/middlewares/socketAuth.middleware')
 const { registerRoomEvents } = require('./src/sockets/room.socket')
 const messageModel = require('./src/models/message.model')
+const mongoose = require('mongoose')
+const { createShutdown } = require('./src/config/shutdown')
 
 
 const server = http.createServer(app)
 
 const io = new Server(server, {
     cors: {
-        origin: 'http://localhost:5173',
+        origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
         credentials: true
     }
 })
@@ -40,5 +42,9 @@ async function startServer(){
     process.exit(1)
    }
 }
+
+const shutdown = createShutdown({ app, io, mongoose })
+process.once('SIGTERM', shutdown)
+process.once('SIGINT', shutdown)
 
 startServer()

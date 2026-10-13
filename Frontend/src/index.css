@@ -52,7 +52,7 @@
   .video-tile { @apply relative min-w-0 overflow-hidden rounded-xl border border-[#34373a] bg-[#26282a]; }
   .video-tile video { @apply aspect-video w-full object-contain; }
   .video-placeholder { @apply flex aspect-video flex-col items-center justify-center gap-2 text-sm text-muted; }
-  .video-label { @apply absolute bottom-2 left-2 rounded-md bg-canvas/85 px-2 py-1 text-xs; }
+  .video-label { @apply absolute bottom-2 left-2 z-10 max-w-[calc(100%-1rem)] truncate rounded-md bg-canvas/85 px-2 py-1 text-xs; }
   .call-controls { @apply flex flex-wrap gap-2 border-t border-line pt-5; }
   .call-controls > div { @apply flex flex-wrap gap-2; }
   .call-controls button { @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-[#3a3d40] bg-[#26282a] px-3 py-2 text-xs font-semibold hover:bg-[#34373a]; }

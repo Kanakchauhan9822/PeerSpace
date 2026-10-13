@@ -10,6 +10,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         if (!room || !socket.connected || !socket.rooms.has(channel) || (requireMedia && socket.data.mediaRoom !== channel)) throw new Error('Join the call first')
         return { room, channel, roomId: roomId.toLowerCase() }
     }
+
     function publish(roomId, hostId) {
         const requests = [...io.sockets.sockets.values()].filter(peer => peer.connected && peer.rooms.has('room:' + roomId) && peer.data.screenRequest?.roomId === roomId && peer.data.screenRequest.expiresAt > Date.now()).map(peer => peer.data.screenRequest)
         for (const peer of io.sockets.sockets.values()) {
@@ -17,6 +18,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         }
         return requests
     }
+
     function handler(event, action) {
         socket.on(event, async (data, ack) => {
             if (typeof ack !== 'function') return
@@ -24,11 +26,13 @@ function registerScreenPermissions(io, socket, broadcast) {
             catch (error) { ack({ success: false, message: error.message }) }
         })
     }
+
     handler('screen:list', async data => {
         const { room, roomId } = await roomFor(data.roomId)
         if (String(room.host) !== String(socket.data.userId)) throw new Error('Host only')
         return { roomId, requests: publish(roomId, room.host) }
     })
+
     handler('screen:request', async data => {
         const { room, roomId } = await roomFor(data.roomId)
         const expiresAt = Date.now() + 120000
@@ -39,6 +43,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         publish(roomId, room.host)
         return { allowed: false }
     })
+
     handler('screen:decide', async data => {
         const { room, roomId } = await roomFor(data.roomId)
         if (String(room.host) !== String(socket.data.userId) || typeof data.allowed !== 'boolean') throw new Error('Host only')
@@ -50,6 +55,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         target.emit('screen:decision', { roomId, allowed: data.allowed, hostId: String(room.host), expiresAt })
         publish(roomId, room.host)
     })
+
     handler('screen:start', async data => {
         const { room, roomId, channel } = await roomFor(data.roomId, true)
         const grant = socket.data.screenGrant
@@ -59,6 +65,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         socket.data.screenSharing = true
         broadcast(channel)
     })
+
     handler('screen:stop', async data => {
         const { channel } = await roomFor(data.roomId)
         delete socket.data.screenActive
@@ -66,6 +73,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         socket.data.screenSharing = false
         broadcast(channel)
     })
+
     function clearPermission() {
         const request = socket.data.screenRequest
         delete socket.data.screenActive
@@ -74,6 +82,7 @@ function registerScreenPermissions(io, socket, broadcast) {
         socket.data.screenSharing = false
         if (request) publish(request.roomId, request.hostId)
     }
+
     socket.on('webrtc:leave', clearPermission)
     socket.on('disconnect', clearPermission)
     socket.on('room:unsubscribe', data => {

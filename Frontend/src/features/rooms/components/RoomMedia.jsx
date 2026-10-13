@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import RemoteVideo from './RemoteVideo'
+import SpeakingIndicator from './SpeakingIndicator'
 import { getRoomIceServers } from '../services/room.api'
 import { replaceVideoTrack } from '../services/mediaTracks'
 import { galleryMembers } from '../services/gallery'
@@ -22,6 +23,7 @@ export default function RoomMedia({ roomId, socket, members = [], localUserId, h
     const streamRef = useRef(null)
     const peerConnectionsRef = useRef(new Map())
     const [micEnabled, setMicEnabled] = useState(false)
+    const [microphoneStream, setMicrophoneStream] = useState(null)
     const [cameraEnabled, setCameraEnabled] = useState(false)
     const [micStarting, setMicStarting] = useState(false)
     const micStartingRef = useRef(false)
@@ -639,6 +641,7 @@ export default function RoomMedia({ roomId, socket, members = [], localUserId, h
                 track.stop()
                 return
             }
+            setMicrophoneStream(stream)
             setMicEnabled(true)
         } catch {
             capture?.getTracks().forEach(track => {
@@ -933,7 +936,7 @@ export default function RoomMedia({ roomId, socket, members = [], localUserId, h
                         maxWidth: '100%'
                     }} />
                     {(!cameraEnabled) && <ParticipantAvatar name="You" />}
-                    <span className="video-label">You</span>
+                    <span className="video-label">You<SpeakingIndicator stream={microphoneStream} enabled={micEnabled} /></span>
                 </div>
                 {socket && remoteStreams.map(participant => {
                     const member = gallery.find(item => item.socketId === participant.socketId)

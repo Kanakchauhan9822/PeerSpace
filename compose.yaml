@@ -1,0 +1,11 @@
+services:
+  peerspace:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - Backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    stop_grace_period: 15s

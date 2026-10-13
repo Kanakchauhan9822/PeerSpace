@@ -1,3 +1,4 @@
+import { enableRoomAudio } from '../services/roomAudio'
 import PageShell from '../../../components/PageShell'
 import { joinRoom, getRoom } from '../services/room.api'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -15,6 +16,7 @@ export default function JoinInvite() {
   const handleJoin=useCallback(async()=> {
     if (joining) return
 
+    enableRoomAudio()
     setJoining(true)
     setError('')
 
