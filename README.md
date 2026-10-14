@@ -68,3 +68,15 @@ Deploy one instance of this Docker image behind HTTPS, passing the environment s
 No hosting account or paid resource is created by this setup. A strictly free provider and its current limits still need to be selected and verified.
 
 Presence and screen-share approvals currently live in process memory. Before adding backend instances, introduce shared state and a Socket.IO adapter, plus appropriate session affinity if polling remains enabled. Larger video meetings require an SFU; backend replicas alone do not scale the current peer-to-peer media mesh. TURN quotas and browser autoplay restrictions still apply.
+
+## Production checks
+
+Registration requires passwords of at least 8 characters and at most 72 UTF-8 bytes (bcrypt's input limit), usernames up to 50 characters and emails up to 254 characters. Room names are limited to 100 characters. Existing passwords below 8 characters still work at login.
+
+Authentication endpoints are limited by client IP: 10 registrations and 30 login requests per 15 minutes. Room creation allows 10 requests per minute per user, joining 30. Sockets allow 120 non-ICE events and 600 ICE events per user per minute. Limits are in memory and reset on restart; use shared storage before deploying multiple replicas. HTTP rejections return 429 with Retry-After.
+
+API writes and browser WebSocket handshakes require CLIENT_ORIGIN to match the website origin. Postman/server clients without an Origin header must still authenticate. JSON bodies are limited to 32 KB, socket messages to 128 KB. Cookies and private API responses are not cached. Socket sessions disconnect at token expiry; logout disconnects sockets sharing that login token.
+
+Behind a hosting proxy, configure TRUST_PROXY only after verifying the provider's exact proxy topology (hop count or trusted addresses). Do not blindly trust all forwarded headers: incorrect settings can let users bypass IP limits. Leave it unset for local Docker. Verify this configuration and HTTPS cookies on the selected hosting service before release.
+
+Before publishing, manually verify with two real users on different networks: login/logout, room creation/joining, camera-off audio, TURN connectivity, host-approved screen sharing and reconnect after network loss. Automated tests use synthetic media and cannot verify a provider's live TURN quota or a user's device permissions.

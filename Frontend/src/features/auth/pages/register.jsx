@@ -53,7 +53,7 @@ async function handleSubmit(e) {
             handleSubmit}>
             <label htmlFor="username">Username</label>
             <input id="username"
-            name="username" autoComplete="username" placeholder="Your name"
+            maxLength={50} name="username" autoComplete="username" placeholder="Your name"
             type="text"
             value={username}
             onChange={(e)=>setUsername(e.target.value)}
@@ -62,7 +62,7 @@ async function handleSubmit(e) {
             <label htmlFor="email">Email</label>
             <input id="email"
             name="email" autoComplete="email" placeholder="you@college.edu"
-            type="email"
+            type="email" maxLength={254}
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
             required></input>
@@ -71,7 +71,7 @@ async function handleSubmit(e) {
             <input id="password"
             name="password"
             type="password"
-            autoComplete="new-password"
+            autoComplete="new-password" minLength={8}
             value={password}
             onChange={(e)=>setPassword(e.target.value)}
             required></input>

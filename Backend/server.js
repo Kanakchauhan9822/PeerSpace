@@ -15,6 +15,8 @@ const { createShutdown } = require('./src/config/shutdown')
 const server = http.createServer(app)
 
 const io = new Server(server, {
+    maxHttpBufferSize: 128 * 1024,
+    allowRequest: (req, callback) => callback(null, !req.headers.origin || req.headers.origin === (process.env.CLIENT_ORIGIN || 'http://localhost:5173')),
     cors: {
         origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
         credentials: true
