@@ -18,6 +18,7 @@ function socketAuth(socket,next){
         }
         
         socket.data.userId=decoded.id
+        socket.data.expiresAt = decoded.exp ? decoded.exp * 1000 : null
         
     }catch{
         return next(new Error('Invalid or expired token'))

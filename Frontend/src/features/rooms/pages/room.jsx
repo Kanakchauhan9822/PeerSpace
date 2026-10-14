@@ -376,7 +376,7 @@ export default function Room() {
                 <RoomTimer timer={room.timer} isHost={isHost} busy={startingTimer} onAction={handleTimerAction} />
                 {timerError && <p role="alert">{timerError}</p>}
                 <div className="meeting-stage mb-5">
-                    <RoomMedia roomId={roomId} socket={mediaSocket} members={room.members} localUserId={user?._id} hostId={room.host?._id} />
+                    <RoomMedia roomId={roomId} socket={mediaSocket} members={room.members} localUserId={user?._id} hostId={room.host?._id} onlineUserIds={onlineUserIds} />
                 </div>
                 <div className="grid items-start gap-5 lg:grid-cols-2">
                     <div className="min-w-0 space-y-5">

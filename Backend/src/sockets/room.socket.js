@@ -1,8 +1,11 @@
+const { createWindowLimit } = require('../middlewares/requestLimits')
 const { registerScreenPermissions } = require('./screenPermissions')
 const mongoose = require('mongoose')
 const roomModel = require('../models/room.model')
 
 function registerRoomEvents(io) {
+    const consumeSignal = createWindowLimit(600, 60000)
+    const consumeAction = createWindowLimit(120, 60000)
     async function broadcastPresence(roomChannel) {
         const sockets = await io.in(roomChannel).fetchSockets()
 
@@ -84,6 +87,19 @@ function registerRoomEvents(io) {
         }
     }
     io.on('connection', (socket) => {
+        if (socket.data.expiresAt) {
+            const expiry = setTimeout(() => socket.disconnect(true), Math.max(0, socket.data.expiresAt - Date.now()))
+            expiry.unref()
+            socket.on('disconnect', () => clearTimeout(expiry))
+        }
+        socket.use?.((packet, next) => {
+            const name = packet[0]
+            const consume = name === 'webrtc:ice-candidate' ? consumeSignal : consumeAction
+            const retry = consume(socket.data.userId)
+            if (!retry && (!socket.data.expiresAt || socket.data.expiresAt > Date.now())) return next()
+            const ack = packet.at(-1)
+            if (typeof ack === 'function') ack({ success: false, message: 'Session expired or too many requests. Please reconnect shortly.' })
+        })
         registerScreenPermissions(io, socket, broadcastMediaPeers)
         socket.on('webrtc:offer', async (payload, acknowledge) => {
             if (typeof acknowledge !== 'function') return

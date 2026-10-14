@@ -7,7 +7,7 @@ import { galleryMembers } from '../services/gallery'
 import ParticipantAvatar from './ParticipantAvatar'
 import MediaControl from './MediaControl'
 
-export default function RoomMedia({ roomId, socket, members = [], localUserId, hostId }) {
+export default function RoomMedia({ roomId, socket, members = [], localUserId, hostId, onlineUserIds }) {
     const [galleryPage, setGalleryPage] = useState(0)
     const [maximizedScreen, setMaximizedScreen] = useState(null)
     const [fullWindowScreen, setFullWindowScreen] = useState(null)
@@ -840,7 +840,7 @@ export default function RoomMedia({ roomId, socket, members = [], localUserId, h
         }
     }
 
-    const gallery = galleryMembers({ members, peers: socket ? peers : [], localUserId, cameraEnabled, screenSharing })
+    const gallery = galleryMembers({ members, peers: socket ? peers : [], localUserId, cameraEnabled, screenSharing, onlineUserIds })
     const screens = [
         ...(screenSharing ? [{ id: 'screen-local', stream: localScreen, name: 'Your screen' }] : []),
         ...remoteStreams.filter(item => peers.some(peer => peer.socketId === item.socketId && peer.screenSharing)).map(item => ({

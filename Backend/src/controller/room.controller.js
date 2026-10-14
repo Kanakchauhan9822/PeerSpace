@@ -15,7 +15,7 @@ async function createRoomController(req, res) {
     const { name } = req.body ?? {}
     if (
         typeof name != "string" ||
-        name.trim() === ""
+        name.trim() === "" || name.trim().length > 100
     ) {
         return res.status(400).json({
             message: "Invalid name"

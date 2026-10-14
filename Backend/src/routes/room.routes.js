@@ -1,3 +1,4 @@
+const { httpLimit } = require('../middlewares/requestLimits')
 const { removeMemberController } = require('../controller/room.controller.js')
 const {Router}=require('express')
 const {createRoomController, listRoomController,joinRoomController, getRoomController, leaveRoomController,transferHostController,endRoomController,getRoomIceServersController}=require('../controller/room.controller.js')
@@ -9,11 +10,11 @@ const { startTimerController, pauseTimerController, resetTimerController, setTim
 const roomRouter=Router()
 
 
-roomRouter.post('/',authUser, createRoomController)
+roomRouter.post('/',authUser, httpLimit(10, 60000, true), createRoomController)
 
 roomRouter.get('/',authUser,listRoomController)
 
-roomRouter.post('/:roomId/join', authUser, joinRoomController)
+roomRouter.post('/:roomId/join', authUser, httpLimit(30, 60000, true), joinRoomController)
 
 roomRouter.post('/:roomId/leave', authUser, leaveRoomController)
 

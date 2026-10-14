@@ -50,6 +50,32 @@ test('real MongoDB persistence and two authenticated socket recipients', {
         return socket
     }
     const [sa, sb] = await Promise.all([connect(a), connect(b)])
+    const signup = await fetch(origin + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'Security Tester', email: 'tester@example.com', password: 'test-password-123' }) })
+    assert.equal(signup.status, 201)
+    const registered = await signup.json()
+    assert.equal(registered.user.password, undefined)
+    const stored = await User.findById(registered.user._id)
+    assert.notEqual(stored.password, 'test-password-123')
+    assert.equal(await require('bcryptjs').compare('test-password-123', stored.password), true)
+    const login = await fetch(origin + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'TESTER@example.com', password: 'test-password-123' }) })
+    assert.equal(login.status, 200)
+    assert.equal((await login.json()).user.password, undefined)
+    const loginCookie = login.headers.get('set-cookie')
+    assert.match(loginCookie, /HttpOnly/i)
+    assert.match(loginCookie, /SameSite=Lax/i)
+    assert.equal((await fetch(origin + '/api/auth/get-me', { headers: { Cookie: loginCookie.split(';')[0] } })).status, 200)
+    const outsider = { id: registered.user._id, _id: registered.user._id }
+    assert.equal((await request(outsider, room.id)).status, 403)
+    assert.equal((await request(b, room.id + '/end', {})).status, 403)
+    assert.equal((await request(b, room.id + '/transfer-host', { newHostId: b.id })).status, 403)
+    assert.equal((await request(b, room.id + '/timer/start', {})).status, 403)
+    assert.equal((await request(a, room.id + '/timer/start', { minutes: -5 })).status, 400)
+    assert.equal((await request(a, room.id + '/timer/start', { minutes: 1 })).status, 200)
+    assert.equal((await request(a, room.id + '/timer/pause', {})).status, 200)
+    assert.equal((await request(a, room.id + '/timer/reset', {})).status, 200)
+
     // A host can approve from the room before either client starts media.
     const screenRequest = new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Host did not receive screen request')), 3000)

@@ -16,6 +16,9 @@ async function registerUserController(req,res){
             message:'Username, email, and password are required.'
         })
     }
+    if (username.trim().length > 50 || email.trim().length > 254 || password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ message: 'Use a username up to 50 characters, an email up to 254 characters, and a password of at least 8 characters and at most 72 UTF-8 bytes.' })
+    }
     const normalizedUsername=username.trim()
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -96,6 +99,9 @@ async function loginUserController(req,res){
         message:"Invalid credentials entered"
     })}
 
+    if (email.length > 254 || Buffer.byteLength(password, 'utf8') > 72) {
+        return res.status(400).json({ message: 'Invalid credentials entered' })
+    }
    const  normalizedEmail= email.trim().toLowerCase()
 
     try{
@@ -166,6 +172,10 @@ async function getMeController(req,res){
 }
 
 function logoutUserController(req,res){
+    const io = req.app.get('io')
+    for (const socket of io?.sockets.sockets.values() || []) {
+        if (socket.request.cookies?.token === req.cookies?.token) socket.disconnect(true)
+    }
     res.clearCookie('token',
         {httpOnly:true,
          secure:process.env.NODE_ENV==='production',
