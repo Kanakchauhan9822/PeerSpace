@@ -1,4 +1,4 @@
-﻿# PeerSpace
+# PeerSpace
 
 **A collaborative study platform where people can meet, talk, share their screen, and focus together in real time.**
 
@@ -178,15 +178,13 @@ Camera and microphone access require HTTPS outside localhost. Production authent
 
 The `/health` endpoint returns `200` when MongoDB is connected and the application is not shutting down, otherwise `503`. Docker checks it every 30 seconds; an unhealthy status does not itself restart the container. Shutdown disconnects sockets, closes HTTP connections and MongoDB, and has an 8-second deadline.
 
-## Security and current limits
+## Security
 
 - Passwords are hashed with bcrypt. Registration requires at least 8 characters and at most 72 UTF-8 bytes. Usernames allow up to 50 characters, emails 254, and room names 100.
-- Room operations require authentication and appropriate membership or host permissions. Registration does not verify email ownership through OTP or an email link.
+- Room operations require authentication and appropriate membership or host permissions.
 - Authentication requests are limited by client IP: 10 registrations and 30 login attempts per 15 minutes. Room creation permits 10 requests per minute per user, and joining permits 30.
 - Socket events are limited to 120 non-ICE events and 600 ICE events per user per minute. HTTP rate-limit responses return `429` with `Retry-After`.
 - API writes and browser socket handshakes validate the configured origin. Clients without an `Origin` header must still satisfy route authentication. JSON bodies are limited to 32 KB and socket messages to 128 KB.
 - Private API responses are not cached. Socket sessions disconnect at token expiry, and logout disconnects sockets associated with that login token.
-- Presence, screen-share approvals, and rate limits are held in process memory. They reset on restart. Multiple backend instances would require shared state and a Socket.IO adapter, plus session affinity if polling remains enabled.
-- WebRTC uses a peer-to-peer mesh suited to small groups. Larger meetings would need a media server such as an SFU; adding backend replicas alone does not scale the media connections.
 
 Do not blindly trust forwarded proxy headers: an incorrect `TRUST_PROXY` setting can let clients bypass IP-based limits.
