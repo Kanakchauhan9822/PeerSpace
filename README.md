@@ -187,4 +187,4 @@ The `/health` endpoint returns `200` when MongoDB is connected and the applicati
 - API writes and browser socket handshakes validate the configured origin. Clients without an `Origin` header must still satisfy route authentication. JSON bodies are limited to 32 KB and socket messages to 128 KB.
 - Private API responses are not cached. Socket sessions disconnect at token expiry, and logout disconnects sockets associated with that login token.
 
-Do not blindly trust forwarded proxy headers: an incorrect `TRUST_PROXY` setting can let clients bypass IP-based limits.
+
