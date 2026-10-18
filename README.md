@@ -1,55 +1,151 @@
-# PeerSpace
+﻿# PeerSpace
 
-Study rooms with authentication, chat, shared timers, host controls, camera/microphone calls and approved screen sharing.
+**A collaborative study platform where people can meet, talk, share their screen, and focus together in real time.**
 
-## Docker: one container
+[Open the live app](https://peerspace-d95c.onrender.com)
 
-Requires Docker Desktop (Linux containers), MongoDB Atlas and TURN credentials.
-From the repository root, copy Backend/.env.example to Backend/.env if you do not already have an .env. Fill in your credentials. Existing users should keep their existing .env.
+PeerSpace brings a study group's video call, messages, and shared countdown into one room. A host creates a room and invites others using a room ID or invite link. Participants can join with their accounts, switch their microphone and camera independently, and request permission to present their screen.
 
-Generate a JWT secret with Node:
+## Features
+
+- **Accounts and authentication:** registration, login, logout, and protected rooms. Joining requires an account; there is no guest mode.
+- **Study rooms:** create a room and enter it automatically, join by ID or invite link, and leave when finished.
+- **Live presence:** participant lists update as people join, leave, or disconnect. Offline participants are hidden from the media gallery.
+- **Audio and video:** independent microphone and camera controls, speaking indicators, and a responsive, paginated participant gallery with avatars for camera-off users.
+- **Screen sharing:** participants request host approval. Shared screens have their own tiles and can expand into a presentation layout or fill the website viewport.
+- **Room chat:** persistent message history and live messages for room members.
+- **Shared study timer:** the host chooses a duration, then starts, pauses, resumes, or resets a countdown synchronized across the room.
+- **Host controls:** transfer ownership, remove participants, approve screen sharing, and end a room for everyone.
+
+## How to use it
+
+1. Open the live app and register or log in.
+2. Create a study room, or join one using its ID or invite link.
+3. Turn on your microphone or camera when needed and allow the browser's device permissions.
+4. Use chat and the shared timer during your study session. Request screen sharing when you want to present.
+5. Leave the room when finished. The host can end the room for everyone.
+
+## Tech stack
+
+| Area | Technologies | Purpose |
+| --- | --- | --- |
+| Frontend | React, JavaScript, Vite | Interactive pages and development/build tooling |
+| UI and routing | Tailwind CSS, React Router | Responsive styling and page navigation |
+| API client | Axios | Requests between the frontend and backend |
+| Backend | Node.js, Express | Authentication, room APIs, and production frontend serving |
+| Database | MongoDB, Mongoose | Store users, rooms, timer state, and chat messages |
+| Authentication | JWT, bcryptjs, HTTP-only cookies | Signed sessions and hashed passwords |
+| Real-time events | Socket.IO | Presence, chat updates, timer updates, and call signaling |
+| Calls and screen sharing | WebRTC, STUN/TURN | Browser-to-browser media and relay connectivity |
+| Packaging and hosting | Docker, Docker Compose, Render | One-container deployment of the application |
+| Checks | Node.js test runner, ESLint, Chrome browser tests | Backend, frontend, and media verification |
+
+## How it works
+
+The React frontend calls Express APIs for authentication and room actions. MongoDB stores persistent data, while Socket.IO delivers live room updates and exchanges the connection information needed to establish WebRTC calls.
+
+**Socket.IO does not carry the audio or video.** WebRTC sends media between participants directly when possible, or through a TURN relay when a direct connection cannot be established.
+
+```mermaid
+flowchart LR
+    A[Participant browser] <-->|HTTP API and Socket.IO| S[Node.js / Express server]
+    B[Participant browser] <-->|HTTP API and Socket.IO| S
+    S <--> D[(MongoDB)]
+    A <-->|WebRTC media| B
+    A <-->|Relayed media when needed| T[External TURN server]
+    B <-->|Relayed media when needed| T
+```
+
+In production, Express also serves the built React frontend. The application runs in **one Docker container**; MongoDB and TURN are external services.
+
+## Run locally
+
+### Prerequisites
+
+- Git to clone the repository.
+- MongoDB Atlas or another reachable MongoDB database.
+- TURN credentials for call configuration and connectivity across networks.
+- Docker Desktop using Linux containers for the Docker setup.
+- Node.js 22.12+ and npm for development without Docker. The Docker image supplies its own Node runtime.
+
+Clone the project:
+
+```sh
+git clone https://github.com/Kanakchauhan9822/PeerSpace.git
+cd PeerSpace
+```
+
+Copy [Backend/.env.example](Backend/.env.example) to `Backend/.env` and fill in your own values. Keep an existing `.env` if you already have one. Never commit credentials.
+
+Generate a random JWT secret with Node, if installed:
 
 ```sh
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Start or rebuild after changing code:
+### Option 1: Docker
+
+Set `CLIENT_ORIGIN=http://localhost:3000` in `Backend/.env`, then run from the repository root:
 
 ```sh
 docker compose up --build
 ```
 
-Open http://localhost:3000. Express serves the built React app, API and Socket.IO. No separate Vite process is needed. MongoDB and TURN stay external; no database runs inside this container.
+Open **http://localhost:3000**. No separate Vite process is needed.
 
-Useful commands:
+| Command | What it does |
+| --- | --- |
+| `docker compose up -d --build` | Build and start in the background |
+| `docker compose ps` | Show container status and health |
+| `docker compose logs -f` | Follow application logs |
+| `docker compose down` | Stop and remove the Compose container |
+
+Run the build command again after changing code. Compose uses port `3000`; stop any other application using it first. To use another local port, change the left side of the Compose port mapping, such as `8080:3000`, and update `CLIENT_ORIGIN` to match.
+
+### Option 2: Development without Docker
+
+Set `CLIENT_ORIGIN=http://localhost:5173` in `Backend/.env`, keep `PORT=3000`, and leave `NODE_ENV` unset.
+
+From the repository root, install dependencies:
 
 ```sh
-docker compose up -d --build
-docker compose ps
-docker compose logs -f
-docker compose down
+npm --prefix Backend ci
+npm --prefix Frontend ci
 ```
 
-The health check calls /health every 30 seconds: 200 when MongoDB is connected, otherwise 503. Docker reports unhealthy after repeated failures; this does not automatically restart the container. Shutdown disconnects sockets, drains HTTP requests and closes MongoDB, with an 8-second deadline.
+Start the backend in one terminal:
 
-Compose fixes the internal port at 3000. For a different local port, change the left side of ports (for example 8080:3000) and CLIENT_ORIGIN accordingly. Stop any old standalone container using the same port first.
+```sh
+npm --prefix Backend run dev
+```
 
-## Environment
+Start the frontend in another terminal:
 
-- MONGO_URI: MongoDB connection string; Atlas must allow your server's network access.
-- JWT_SECRET: long random signing secret.
-- CLIENT_ORIGIN: exact website origin, without a trailing slash. Docker local: http://localhost:3000. Vite local: http://localhost:5173. Hosted: your HTTPS origin.
-- PORT: listening port; defaults to 3000. Compose overrides this to match its mapping.
-- TURN_URL, TURN_USERNAME, TURN_PASSWORD: provider credentials required for call configuration. Keep its URL and transport unchanged.
-- NODE_ENV: production enables static frontend serving and secure cookies. Compose sets this automatically.
+```sh
+npm --prefix Frontend run dev
+```
 
-Secrets are passed at runtime, excluded from Git and Docker's build context. Do not paste secrets into the Dockerfile or frontend code.
+Open **http://localhost:5173**. Vite proxies `/api` and `/socket.io` requests to the backend on port `3000`. Nodemon restarts the backend when its files change.
 
-## Local development without Docker
+## Environment variables
 
-Run npm ci then npm run dev in Backend and Frontend in separate terminals. Backend reads Backend/.env. Set CLIENT_ORIGIN=http://localhost:5173 and leave NODE_ENV unset. Vite proxies API and socket requests to port 3000.
+| Variable | Purpose |
+| --- | --- |
+| `MONGO_URI` | MongoDB connection string. Atlas network access must allow the application server. |
+| `JWT_SECRET` | Long, randomly generated signing secret. |
+| `CLIENT_ORIGIN` | Exact website origin without a trailing slash. Use `http://localhost:3000` for Docker, `http://localhost:5173` for Vite, or the deployed HTTPS origin. |
+| `PORT` | Backend port, default `3000`. Compose sets this to `3000`. |
+| `TURN_URL` | TURN URL supplied by your provider, including its port and transport if specified. |
+| `TURN_USERNAME` | TURN username supplied by your provider. |
+| `TURN_PASSWORD` | TURN credential supplied by your provider. |
+| `NODE_ENV` | `production` enables frontend static serving and secure cookies. Docker sets this automatically. |
+| `TRUST_PROXY` | Optional trusted proxy hop count or addresses. Configure only after verifying the hosting proxy topology; leave unset locally. |
 
-## Checks
+Environment files are excluded from Git and Docker's build context. Supply secrets at runtime rather than placing them in the Dockerfile or frontend source. Authorized call participants receive the ICE configuration needed by their browsers.
+
+## Tests and checks
+
+After installing dependencies, run these commands from the repository root:
 
 ```sh
 npm --prefix Backend test
@@ -57,26 +153,40 @@ npm --prefix Frontend run lint
 npm --prefix Frontend run build
 npm --prefix Frontend run test:screen
 npm --prefix Frontend run test:chat
+node --test Frontend/tests/gallery.test.mjs
 ```
 
-Browser tests require Chrome. The optional backend chat integration test requires an isolated CHAT_TEST_MONGO_URI, never a production database.
+The browser suites require Chrome. The runner defaults to the standard Windows Chrome installation path; set `CHROME_PATH` if Chrome is installed elsewhere.
 
-## Hosting and scaling
+An optional backend integration suite exercises the API and live events against MongoDB:
 
-Deploy one instance of this Docker image behind HTTPS, passing the environment settings at runtime and routing WebSocket upgrades to the same server. Camera and microphone require HTTPS outside localhost. Production cookies are Secure; local testing uses localhost. Set the hosting health path to /health and provide at least 10 seconds for graceful shutdown.
+```sh
+npm --prefix Backend run test:chat:integration
+```
 
-No hosting account or paid resource is created by this setup. A strictly free provider and its current limits still need to be selected and verified.
+Set `CHAT_TEST_MONGO_URI` to an **isolated test database** before running this suite. Never use the production database.
 
-Presence and screen-share approvals currently live in process memory. Before adding backend instances, introduce shared state and a Socket.IO adapter, plus appropriate session affinity if polling remains enabled. Larger video meetings require an SFU; backend replicas alone do not scale the current peer-to-peer media mesh. TURN quotas and browser autoplay restrictions still apply.
+Automated media tests use synthetic streams. Also test with two real users on different networks: authentication, room joining, camera-off audio, screen-share approval, timer updates, and reconnection after network loss. Browser autoplay permissions and a provider's live TURN connectivity require real-world checks.
 
-## Production checks
+## Deployment
 
-Registration requires passwords of at least 8 characters and at most 72 UTF-8 bytes (bcrypt's input limit), usernames up to 50 characters and emails up to 254 characters. Room names are limited to 100 characters. Existing passwords below 8 characters still work at login.
+The public application is hosted on Render at **https://peerspace-d95c.onrender.com**.
 
-Authentication endpoints are limited by client IP: 10 registrations and 30 login requests per 15 minutes. Room creation allows 10 requests per minute per user, joining 30. Sockets allow 120 non-ICE events and 600 ICE events per user per minute. Limits are in memory and reset on restart; use shared storage before deploying multiple replicas. HTTP rejections return 429 with Retry-After.
+To deploy your own copy, use a Docker web service with the repository-root `Dockerfile`, supply the environment variables above, and set `CLIENT_ORIGIN` to your own HTTPS URL. The host must support a long-running Node server and WebSocket upgrades. Configure the health-check path as `/health` and allow at least 10 seconds for graceful shutdown.
 
-API writes and browser WebSocket handshakes require CLIENT_ORIGIN to match the website origin. Postman/server clients without an Origin header must still authenticate. JSON bodies are limited to 32 KB, socket messages to 128 KB. Cookies and private API responses are not cached. Socket sessions disconnect at token expiry; logout disconnects sockets sharing that login token.
+Camera and microphone access require HTTPS outside localhost. Production authentication cookies use the `Secure` flag. Hosting sleep behavior, resource limits, and TURN quotas depend on your provider and plan.
 
-Behind a hosting proxy, configure TRUST_PROXY only after verifying the provider's exact proxy topology (hop count or trusted addresses). Do not blindly trust all forwarded headers: incorrect settings can let users bypass IP limits. Leave it unset for local Docker. Verify this configuration and HTTPS cookies on the selected hosting service before release.
+The `/health` endpoint returns `200` when MongoDB is connected and the application is not shutting down, otherwise `503`. Docker checks it every 30 seconds; an unhealthy status does not itself restart the container. Shutdown disconnects sockets, closes HTTP connections and MongoDB, and has an 8-second deadline.
 
-Before publishing, manually verify with two real users on different networks: login/logout, room creation/joining, camera-off audio, TURN connectivity, host-approved screen sharing and reconnect after network loss. Automated tests use synthetic media and cannot verify a provider's live TURN quota or a user's device permissions.
+## Security and current limits
+
+- Passwords are hashed with bcrypt. Registration requires at least 8 characters and at most 72 UTF-8 bytes. Usernames allow up to 50 characters, emails 254, and room names 100.
+- Room operations require authentication and appropriate membership or host permissions. Registration does not verify email ownership through OTP or an email link.
+- Authentication requests are limited by client IP: 10 registrations and 30 login attempts per 15 minutes. Room creation permits 10 requests per minute per user, and joining permits 30.
+- Socket events are limited to 120 non-ICE events and 600 ICE events per user per minute. HTTP rate-limit responses return `429` with `Retry-After`.
+- API writes and browser socket handshakes validate the configured origin. Clients without an `Origin` header must still satisfy route authentication. JSON bodies are limited to 32 KB and socket messages to 128 KB.
+- Private API responses are not cached. Socket sessions disconnect at token expiry, and logout disconnects sockets associated with that login token.
+- Presence, screen-share approvals, and rate limits are held in process memory. They reset on restart. Multiple backend instances would require shared state and a Socket.IO adapter, plus session affinity if polling remains enabled.
+- WebRTC uses a peer-to-peer mesh suited to small groups. Larger meetings would need a media server such as an SFU; adding backend replicas alone does not scale the media connections.
+
+Do not blindly trust forwarded proxy headers: an incorrect `TRUST_PROXY` setting can let clients bypass IP-based limits.
